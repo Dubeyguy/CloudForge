@@ -1,0 +1,40 @@
+/* 1. Absolute top of the file (MANDATORY for PostCSS) */
+@import '@xyflow/react/dist/style.css';
+
+/* 2. Inject Tailwind CSS Directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 3. Base HTML/Body reset to ensure full-screen canvas */
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #09090b;
+}
+
+/* 4. Custom Scrollbar for the side panels */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent; 
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* 5. Override React Flow CSS Variables for the Dark Theme */
+.react-flow {
+  --xy-edge-stroke-default: #52525b;
+  --xy-edge-stroke-width-default: 2;
+  --xy-connectionline-stroke-default: #f59e0b;
+  --xy-connectionline-stroke-width-default: 2;
+}
