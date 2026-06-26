@@ -8,6 +8,10 @@ import {
   ReactFlowProvider,
   useReactFlow,
   NodeResizer,
+  Handle,
+  Position,
+  ConnectionMode,
+  reconnectEdge, // <-- Added for Edge Reconnection
 } from "@xyflow/react";
 import {
   Play,
@@ -42,6 +46,8 @@ import {
   Square,
   Circle as CircleIcon,
   Type,
+  Undo,
+  Redo,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
@@ -52,7 +58,32 @@ import "@xyflow/react/dist/style.css";
 
 const S3Node = ({ data }) => {
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-3 shadow-lg dark:shadow-xl min-w-[220px] transition-all hover:border-amber-400 dark:hover:border-amber-500/50 cursor-grab active:cursor-grabbing group">
+    <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-3 shadow-lg dark:shadow-xl min-w-[220px] transition-all hover:border-amber-400 dark:hover:border-amber-500/50 cursor-grab active:cursor-grabbing group relative">
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="top"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-amber-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="right"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-amber-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="bottom"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-amber-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="left"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-amber-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg text-amber-600 dark:text-amber-500 border border-amber-100 dark:border-amber-500/20 shadow-inner">
@@ -87,7 +118,31 @@ const ShapeNode = ({ data, selected }) => {
 
   if (isText) {
     return (
-      <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-4 shadow-lg dark:shadow-xl flex items-center justify-center min-w-[120px] min-h-[80px] transition-all hover:border-blue-400 dark:hover:border-blue-500/50 cursor-grab active:cursor-grabbing rounded-xl">
+      <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-4 shadow-lg dark:shadow-xl flex items-center justify-center min-w-[120px] min-h-[80px] transition-all hover:border-blue-400 dark:hover:border-blue-500/50 cursor-grab active:cursor-grabbing rounded-xl group relative">
+        <Handle
+          type="source"
+          position={Position.Top}
+          id="top"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+        />
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="right"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+        />
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="bottom"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+        />
+        <Handle
+          type="source"
+          position={Position.Left}
+          id="left"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+        />
         <span className="text-slate-800 dark:text-zinc-200 font-bold text-sm text-center">
           {data?.label || "Text Note"}
         </span>
@@ -105,8 +160,33 @@ const ShapeNode = ({ data, selected }) => {
         keepAspectRatio={isCircle}
       />
       <div
-        className={`w-full h-full relative border-4 border-dashed border-slate-300 dark:border-zinc-700 bg-slate-500/5 dark:bg-zinc-500/5 transition-colors hover:border-blue-400 dark:hover:border-blue-500/80 cursor-grab active:cursor-grabbing ${isCircle ? "rounded-full" : "rounded-3xl"}`}
+        className={`w-full h-full relative border-4 border-dashed border-slate-300 dark:border-zinc-700 bg-slate-500/5 dark:bg-zinc-500/5 transition-colors hover:border-blue-400 dark:hover:border-blue-500/80 cursor-grab active:cursor-grabbing group ${isCircle ? "rounded-full" : "rounded-3xl"}`}
       >
+        <Handle
+          type="source"
+          position={Position.Top}
+          id="top"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
+        />
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="right"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
+        />
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="bottom"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
+        />
+        <Handle
+          type="source"
+          position={Position.Left}
+          id="left"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
+        />
+
         <div
           className={`absolute inset-4 nodrag cursor-default ${isCircle ? "rounded-full" : "rounded-2xl"}`}
         ></div>
@@ -150,7 +230,7 @@ const WelcomeScreen = ({ projects, onCreateProject, onLoadProject }) => {
 
   useEffect(() => {
     const sequence = [
-      "Initializing CloudForge Engine v0.5...",
+      "Initializing CloudForge Engine v0.8...",
       "Mounting visual workspace...",
       "Connecting to local storage driver...",
       "System ready.",
@@ -356,6 +436,9 @@ function CloudForgeEditor({
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
 
+  const [past, setPast] = useState([]);
+  const [future, setFuture] = useState([]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -381,10 +464,50 @@ function CloudForgeEditor({
       type: "success",
     },
   ]);
-
   const addLog = useCallback((text, type = "info") => {
     setLogs((prev) => [...prev, { id: Date.now(), text, type }]);
   }, []);
+
+  const takeSnapshot = useCallback(() => {
+    setPast((p) => [...p, { nodes, edges }]);
+    setFuture([]);
+  }, [nodes, edges]);
+
+  const undo = useCallback(() => {
+    if (past.length === 0) return;
+    const previous = past[past.length - 1];
+    setPast((p) => p.slice(0, p.length - 1));
+    setFuture((f) => [{ nodes, edges }, ...f]);
+    setNodes(previous.nodes);
+    setEdges(previous.edges);
+    addLog(`⏪ Action undone.`, "info");
+  }, [past, nodes, edges, setNodes, setEdges, addLog]);
+
+  const redo = useCallback(() => {
+    if (future.length === 0) return;
+    const next = future[0];
+    setFuture((f) => f.slice(1));
+    setPast((p) => [...p, { nodes, edges }]);
+    setNodes(next.nodes);
+    setEdges(next.edges);
+    addLog(`⏩ Action redone.`, "info");
+  }, [future, nodes, edges, setNodes, setEdges, addLog]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "y") {
+        e.preventDefault();
+        redo();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
 
   useEffect(() => {
     if (!userSettings.autoSave) return;
@@ -394,12 +517,29 @@ function CloudForgeEditor({
     return () => clearTimeout(timer);
   }, [nodes, edges, activeProject.id, onSave, userSettings.autoSave]);
 
+  // CONNECT HANDLER
   const onConnect = useCallback(
-    (params) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
+    (params) => {
+      takeSnapshot();
+      setEdges((eds) => addEdge(params, eds));
+    },
+    [setEdges, takeSnapshot],
   );
 
-  // LEFT CLICK: Selects the node, opens properties panel
+  // RECONNECT HANDLER: Allows user to drag existing edges to new handles
+  const onReconnect = useCallback(
+    (oldEdge, newConnection) => {
+      takeSnapshot();
+      setEdges((els) => reconnectEdge(oldEdge, newConnection, els));
+      addLog(`🔌 Edge re-routed successfully.`, "info");
+    },
+    [setEdges, takeSnapshot, addLog],
+  );
+
+  const onNodeDragStart = useCallback(() => {
+    takeSnapshot();
+  }, [takeSnapshot]);
+
   const onNodeClick = useCallback((event, node) => {
     setSelectedNodeId(node.id);
     setContextMenu(null);
@@ -421,9 +561,9 @@ function CloudForgeEditor({
     return () => window.removeEventListener("click", handleClick);
   }, []);
 
-  // RIGHT CLICK: Opens Context Menu ONLY. (Removed setSelectedNodeId here)
   const onNodeContextMenu = useCallback((event, node) => {
     event.preventDefault();
+    setSelectedNodeId(node.id);
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -448,6 +588,7 @@ function CloudForgeEditor({
 
   const handleDelete = () => {
     if (!contextMenu) return;
+    takeSnapshot();
     setNodes((nds) => nds.filter((n) => n.id !== contextMenu.id));
     setEdges((eds) =>
       eds.filter(
@@ -470,6 +611,7 @@ function CloudForgeEditor({
 
   const handlePaste = () => {
     if (!clipboard) return;
+    takeSnapshot();
     const position = screenToFlowPosition({
       x: contextMenu.x,
       y: contextMenu.y,
@@ -508,6 +650,7 @@ function CloudForgeEditor({
   };
 
   const addNewS3Node = () => {
+    takeSnapshot();
     const newNode = {
       id: `s3_${Date.now()}`,
       type: "s3Node",
@@ -527,6 +670,7 @@ function CloudForgeEditor({
   };
 
   const addNewShape = (type) => {
+    takeSnapshot();
     const isContainer = type === "Rectangle" || type === "Circle";
     const newNode = {
       id: `shape_${Date.now()}`,
@@ -544,6 +688,7 @@ function CloudForgeEditor({
   };
 
   const clearCanvas = () => {
+    takeSnapshot();
     setNodes([]);
     setEdges([]);
     setSelectedNodeId(null);
@@ -631,10 +776,18 @@ function CloudForgeEditor({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onReconnect={onReconnect} // ACTIVE EDGE REROUTING LISTENER
+          onNodeDragStart={onNodeDragStart}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
           onNodeContextMenu={onNodeContextMenu}
           onPaneContextMenu={onPaneContextMenu}
+          connectionMode={ConnectionMode.Loose}
+          defaultEdgeOptions={{
+            style: { strokeWidth: 2, stroke: "#94a3b8" },
+            reconnectable: true, // ENABLES GRABBERS ON CLICK
+            focusable: true,
+          }}
           nodeTypes={nodeTypes}
           fitView
           proOptions={{ hideAttribution: true }}
@@ -649,7 +802,7 @@ function CloudForgeEditor({
 
       {/* FLOATING HEADER */}
       <header className="absolute top-6 inset-x-6 flex items-center justify-between pointer-events-none z-40">
-        {/* Left Island (Menu & Project) */}
+        {/* Left Island (Menu, Project & Undo/Redo) */}
         <div className="flex items-center gap-4 pointer-events-auto relative">
           <button
             onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
@@ -677,6 +830,25 @@ function CloudForgeEditor({
               size={14}
               className={`text-slate-400 dark:text-zinc-500 transition-transform ${isProjectDropdownOpen ? "rotate-90" : ""}`}
             />
+          </div>
+
+          {/* UNDO / REDO CONTROLS */}
+          <div className="flex items-center gap-1 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 p-1 rounded-xl shadow-sm dark:shadow-xl transition-colors">
+            <button
+              onClick={undo}
+              disabled={past.length === 0}
+              className={`p-1.5 rounded-lg transition-colors ${past.length === 0 ? "text-slate-300 dark:text-zinc-700 cursor-not-allowed" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"}`}
+            >
+              <Undo size={18} />
+            </button>
+            <div className="w-px h-4 bg-slate-200 dark:bg-zinc-800 mx-0.5"></div>
+            <button
+              onClick={redo}
+              disabled={future.length === 0}
+              className={`p-1.5 rounded-lg transition-colors ${future.length === 0 ? "text-slate-300 dark:text-zinc-700 cursor-not-allowed" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"}`}
+            >
+              <Redo size={18} />
+            </button>
           </div>
 
           {/* Project Dropdown */}
@@ -815,7 +987,7 @@ function CloudForgeEditor({
         </div>
       </header>
 
-      {/* FLOATING LEFT SIDEBAR */}
+      {/* FLOATING LEFT SIDEBAR (Accordion IDE Style) */}
       <aside
         className={`absolute top-24 bottom-6 z-30 overflow-hidden transition-all duration-300 ease-in-out border border-slate-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl flex flex-col rounded-2xl shadow-xl dark:shadow-2xl ${isLeftPanelOpen ? "left-6 w-72 translate-x-0 pointer-events-auto" : "left-0 w-0 -translate-x-full opacity-0 pointer-events-none"}`}
       >
@@ -1030,6 +1202,7 @@ function CloudForgeEditor({
             <div className="pt-6 mt-auto border-t border-slate-100 dark:border-zinc-800/80">
               <button
                 onClick={() => {
+                  takeSnapshot();
                   setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
                   setSelectedNodeId(null);
                   setContextMenu(null);
