@@ -23,13 +23,22 @@
     "stripInternal": true,
     "target": "ES2018",
     "incremental": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "ignoreDeprecations": "6.0",
+    "isolatedModules": true,
+    "types": [
+      "jest",
+      "node"
+    ]
   },
   "include": [
     "**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "cdktf.out"
+    "cdktf.out",
+    "dist"
   ]
 }

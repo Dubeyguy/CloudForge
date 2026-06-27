@@ -38,3 +38,147 @@ html, body, #root {
   --xy-connectionline-stroke-default: #f59e0b;
   --xy-connectionline-stroke-width-default: 2;
 }
+
+/* Welcome Screen Background Pattern */
+.welcome-pattern {
+  background-image: radial-gradient(#cbd5e1 2px, transparent 2px);
+  background-size: 64px 64px;
+}
+.dark .welcome-pattern {
+  background-image: radial-gradient(#3f3f46 2px, transparent 2px);
+}
+.forest .welcome-pattern {
+  background-image: radial-gradient(#31433C 2px, transparent 2px);
+}
+
+/* 6. Forest Theme Style Overrides */
+.forest {
+  background-color: #1B2727 !important; /* Outer Space */
+  color: #D5DDDF; /* Geyser */
+}
+
+/* Inner elements (nodes, buttons, etc) - Mineral Green */
+.forest .bg-slate-50,
+.forest .bg-slate-100,
+.forest .dark\:bg-zinc-900,
+.forest .dark\:bg-zinc-900\/80 {
+  background-color: #31433C !important; /* Slightly darker Mineral Green */
+}
+
+/* Base panels/containers - Darker background for contrast */
+.forest .bg-white,
+.forest .dark\:bg-zinc-950,
+.forest .dark\:bg-zinc-900\/50 {
+  background-color: #273630 !important; /* Darker than Mineral Green */
+}
+
+/* Translucent panels (Sidebar, properties) */
+.forest .bg-slate-50\/90,
+.forest .bg-white\/90,
+.forest .dark\:bg-zinc-950\/80,
+.forest .bg-white\/95,
+.forest .dark\:bg-zinc-900\/95 {
+  background-color: rgba(39, 54, 48, 0.95) !important;
+}
+
+.forest .hover\:bg-slate-50:hover,
+.forest .hover\:bg-slate-100:hover,
+.forest .dark\:hover\:bg-zinc-800:hover,
+.forest .dark\:hover\:bg-zinc-800\/50:hover {
+  background-color: #2e3e37 !important; /* Darker Mineral Green for hover */
+}
+
+/* Primary buttons overriding slate-900 */
+.forest .bg-slate-900,
+.forest .dark\:bg-zinc-100 {
+  background-color: #3C5148 !important; /* Mineral Green */
+  color: #D5DDDF !important;
+}
+
+.forest .hover\:bg-slate-800:hover,
+.forest .dark\:hover\:bg-white:hover {
+  background-color: #4e6a5b !important; /* Lighter Green on hover */
+  color: #D5DDDF !important;
+}
+
+/* Override borders */
+.forest .border-slate-200,
+.forest .dark\:border-zinc-800,
+.forest .border-slate-100,
+.forest .dark\:border-zinc-800\/80 {
+  border-color: #4e6a5b !important; /* Somewhere between mineral green and asparagus */
+}
+
+/* Override text colors */
+.forest .text-slate-900,
+.forest .hover\:text-slate-900:hover,
+.forest .text-slate-800,
+.forest .dark\:text-zinc-100,
+.forest .dark\:text-zinc-200,
+.forest .text-slate-700,
+.forest .dark\:text-zinc-300 {
+  color: #D5DDDF !important; /* Geyser */
+}
+
+.forest .text-slate-600,
+.forest .dark\:text-zinc-400,
+.forest .text-slate-500,
+.forest .dark\:text-zinc-500 {
+  color: #B2C5B2 !important; /* Green Spring */
+}
+
+/* Accent: Asparagus (#6B8E4E) replacing Amber (#f59e0b) and Violet */
+.forest .text-amber-500,
+.forest .text-amber-600,
+.forest .group-hover\:text-amber-500:group-hover,
+.forest .text-violet-500,
+.forest .text-violet-600,
+.forest .group-hover\:text-violet-500:group-hover {
+  color: #6B8E4E !important;
+}
+
+.forest .bg-amber-500,
+.forest .bg-amber-600,
+.forest .hover\:bg-amber-500:hover,
+.forest .hover\:bg-amber-400:hover,
+.forest .bg-violet-500,
+.forest .bg-violet-600,
+.forest .hover\:bg-violet-500:hover,
+.forest .hover\:bg-violet-400:hover {
+  background-color: #6B8E4E !important;
+  color: #1B2727 !important; /* Outer Space text for contrast */
+}
+
+.forest .bg-amber-100,
+.forest .dark\:bg-amber-500\/10,
+.forest .group-hover\:bg-amber-200:group-hover,
+.forest .dark\:group-hover\:bg-amber-500\/20:group-hover,
+.forest .bg-violet-100,
+.forest .dark\:bg-violet-500\/10,
+.forest .group-hover\:bg-violet-200:group-hover,
+.forest .dark\:group-hover\:bg-violet-500\/20:group-hover {
+  background-color: rgba(107, 142, 78, 0.15) !important;
+  color: #6B8E4E !important;
+  border-color: rgba(107, 142, 78, 0.3) !important;
+}
+
+.forest .shadow-\[0_4px_15px_rgba\(245\,158\,11\,0\.3\)\] {
+  box-shadow: 0 4px 15px rgba(107, 142, 78, 0.3) !important;
+}
+
+.forest .accent-amber-500 {
+  accent-color: #6B8E4E !important;
+}
+
+.forest .focus\:border-amber-500:focus {
+  border-color: #6B8E4E !important;
+}
+
+/* ReactFlow overrides in Forest theme */
+.forest .react-flow {
+  --xy-edge-stroke-default: #B2C5B2;
+  --xy-edge-stroke-width-default: 2;
+  --xy-connectionline-stroke-default: #6B8E4E;
+  --xy-connectionline-stroke-width-default: 2;
+  background-color: #1B2727;
+}

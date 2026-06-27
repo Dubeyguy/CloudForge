@@ -31,6 +31,7 @@ import {
   HardDrive,
   CloudLightning,
   ChevronRight,
+  ChevronDown,
   Activity,
   FolderOpen,
   Plus,
@@ -41,6 +42,7 @@ import {
   Settings,
   Moon,
   Sun,
+  Sparkles,
   Save,
   Search,
   Square,
@@ -48,9 +50,68 @@ import {
   Type,
   Undo,
   Redo,
+  User,
+  Users,
+  Key,
+  Shield,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
+
+// ==========================================
+// CUSTOM COMPONENTS
+// ==========================================
+const CustomSelect = ({ value, onChange, options, className }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectRef = React.useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (selectRef.current && !selectRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find((opt) => opt.value === value);
+
+  return (
+    <div className="relative w-full" ref={selectRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`${className} flex items-center justify-between text-left`}
+      >
+        <span className="truncate pr-2">{selectedOption ? selectedOption.label : value}</span>
+        <ChevronDown size={14} className={`shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-[100] top-full left-0 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden py-1">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                value === opt.value
+                  ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 font-bold"
+                  : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ==========================================
 // 1. CUSTOM NODES
@@ -107,6 +168,68 @@ const S3Node = ({ data }) => {
         >
           {data?.isPublic ? "Public" : "Private"}
         </span>
+      </div>
+    </div>
+  );
+};
+
+const IAMNode = ({ data }) => {
+  const getIcon = () => {
+    switch (data?.iamType) {
+      case "User":
+        return <User size={16} />;
+      case "Group":
+        return <Users size={16} />;
+      case "Role":
+        return <Shield size={16} />;
+      case "Policy":
+        return <Key size={16} />;
+      default:
+        return <User size={16} />;
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-3 shadow-lg dark:shadow-xl min-w-[220px] transition-all hover:border-violet-400 dark:hover:border-violet-500/50 cursor-grab active:cursor-grabbing group relative">
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="top"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="right"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="bottom"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="left"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-violet-50 dark:bg-violet-500/10 rounded-lg text-violet-600 dark:text-violet-500 border border-violet-100 dark:border-violet-500/20 shadow-inner">
+            {getIcon()}
+          </div>
+          <div className="flex flex-col">
+            <h4 className="text-slate-800 dark:text-zinc-100 font-bold text-sm leading-tight tracking-wide">
+              {data?.label || `IAM ${data?.iamType || "Resource"}`}
+            </h4>
+            <p className="text-slate-400 dark:text-zinc-500 text-[10px] uppercase tracking-widest mt-0.5 font-semibold">
+              AWS IAM {data?.iamType}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -200,7 +323,57 @@ const ShapeNode = ({ data, selected }) => {
   );
 };
 
-const nodeTypes = { s3Node: S3Node, shapeNode: ShapeNode };
+const IAMGroupNode = ({ data, selected }) => {
+  return (
+    <>
+      <NodeResizer
+        color="#8b5cf6"
+        isVisible={selected}
+        minWidth={250}
+        minHeight={150}
+      />
+      <div
+        className={`w-full h-full relative border-4 border-dashed border-violet-300 dark:border-violet-500/50 bg-violet-500/5 dark:bg-violet-500/10 transition-colors hover:border-violet-400 dark:hover:border-violet-500/80 cursor-grab active:cursor-grabbing group rounded-3xl`}
+      >
+        <Handle
+          type="source"
+          position={Position.Top}
+          id="top"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
+        />
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="right"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
+        />
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="bottom"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
+        />
+        <Handle
+          type="source"
+          position={Position.Left}
+          id="left"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
+        />
+
+        <div className="absolute top-4 left-4 flex items-center gap-2 pointer-events-none select-none z-10">
+          <div className="p-1.5 bg-violet-100 dark:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500">
+            <Users size={14} />
+          </div>
+          <span className="text-violet-700 dark:text-violet-300 font-bold text-xs uppercase tracking-widest">
+            {data?.label || "IAM Group"}
+          </span>
+        </div>
+      </div>
+    </>
+  );
+};
+
+const nodeTypes = { s3Node: S3Node, shapeNode: ShapeNode, iamNode: IAMNode, iamGroupNode: IAMGroupNode };
 
 const defaultInitialNodes = [
   {
@@ -254,7 +427,7 @@ const WelcomeScreen = ({ projects, onCreateProject, onLoadProject }) => {
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 dark:bg-zinc-950 items-center justify-center font-sans relative overflow-hidden transition-colors duration-300">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#27272a_1px,transparent_1px),linear-gradient(to_bottom,#27272a_1px,transparent_1px)] bg-[size:32px_32px]"></div>
+      <div className="absolute inset-0 welcome-pattern opacity-80"></div>
 
       <div className="z-10 w-full max-w-3xl p-10">
         <div className="flex items-center gap-4 mb-8">
@@ -425,7 +598,7 @@ function CloudForgeEditor({
   userSettings,
   updateSettings,
 }) {
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, getIntersectingNodes, getNode } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState(
     activeProject?.nodes || [],
@@ -447,6 +620,7 @@ function CloudForgeEditor({
 
   const [expandedCategories, setExpandedCategories] = useState({
     aws: true,
+    iam: true,
     shapes: false,
   });
   const [searchQuery, setSearchQuery] = useState("");
@@ -540,6 +714,97 @@ function CloudForgeEditor({
     takeSnapshot();
   }, [takeSnapshot]);
 
+  const onNodeDragStop = useCallback(
+    (event, node) => {
+      const internalNode = getNode(node.id);
+
+      // Handle detaching from group if dragged outside its parent
+      if (node.parentNode) {
+        const parentGroupNode = getNode(node.parentNode);
+        if (parentGroupNode) {
+          const intersections = getIntersectingNodes(node).map((n) => n.id);
+          if (!intersections.includes(parentGroupNode.id)) {
+            setNodes((nds) =>
+              nds.map((n) => {
+                if (n.id === node.id) {
+                  const { parentNode, extent, ...rest } = n;
+                  return {
+                    ...rest,
+                    // Use the exact absolute position from React Flow's internal store
+                    position: internalNode?.positionAbsolute || {
+                      x: parentGroupNode.position.x + node.position.x,
+                      y: parentGroupNode.position.y + node.position.y,
+                    },
+                  };
+                }
+                return n;
+              })
+            );
+            addLog(`User detached from IAM Group`, "info");
+            return;
+          }
+        }
+      }
+
+      // Handle dropping into IAM Group
+      if (node.type === "iamNode" && node.data?.iamType === "User") {
+        const intersections = getIntersectingNodes(node).filter(
+          (n) => n.type === "iamGroupNode"
+        );
+
+        if (intersections.length > 0 && !node.parentNode) {
+          const groupNode = intersections[0];
+
+          setNodes((nds) => {
+            const childrenInGroup = nds.filter(
+              (n) => n.parentNode === groupNode.id
+            );
+            
+            // Auto-layout: Determine the next available grid slot in the group
+            const childIndex = childrenInGroup.length; 
+            const row = Math.floor(childIndex / 2);
+            const col = childIndex % 2;
+            const targetRelativeX = 20 + col * 240; // 240px spacing horizontally
+            const targetRelativeY = 60 + row * 80;  // 80px spacing vertically
+
+            const newChildrenCount = childrenInGroup.length + 1;
+
+            const updatedNodes = nds.map((n) => {
+              // Expand group node if it has many children
+              if (n.id === groupNode.id) {
+                const minHeight = 100 + Math.ceil(newChildrenCount / 2) * 80;
+                const currentHeight = n.style?.height || 200;
+                return {
+                  ...n,
+                  style: {
+                    ...n.style,
+                    height: Math.max(currentHeight, minHeight),
+                  },
+                };
+              }
+              // Snap user node inside to its designated grid slot
+              if (n.id === node.id) {
+                return {
+                  ...n,
+                  parentNode: groupNode.id,
+                  position: { x: targetRelativeX, y: targetRelativeY },
+                };
+              }
+              return n;
+            });
+
+            // React Flow requires child nodes to appear AFTER their parent nodes in the array.
+            const targetNode = updatedNodes.find((n) => n.id === node.id);
+            const withoutTarget = updatedNodes.filter((n) => n.id !== node.id);
+            return [...withoutTarget, targetNode];
+          });
+          addLog(`User grouped into IAM Group`, "success");
+        }
+      }
+    },
+    [getIntersectingNodes, getNode, setNodes, addLog]
+  );
+
   const onNodeClick = useCallback((event, node) => {
     setSelectedNodeId(node.id);
     setContextMenu(null);
@@ -577,6 +842,16 @@ function CloudForgeEditor({
     setContextMenu({ x: event.clientX, y: event.clientY, type: "pane" });
   }, []);
 
+  const onEdgeContextMenu = useCallback((event, edge) => {
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      type: "edge",
+      id: edge.id,
+    });
+  }, []);
+
   const handleCopy = () => {
     const nodeToCopy = nodes.find((n) => n.id === contextMenu.id);
     if (nodeToCopy) {
@@ -589,14 +864,19 @@ function CloudForgeEditor({
   const handleDelete = () => {
     if (!contextMenu) return;
     takeSnapshot();
-    setNodes((nds) => nds.filter((n) => n.id !== contextMenu.id));
-    setEdges((eds) =>
-      eds.filter(
-        (e) => e.source !== contextMenu.id && e.target !== contextMenu.id,
-      ),
-    );
-    if (selectedNodeId === contextMenu.id) setSelectedNodeId(null);
-    addLog(`🗑️ Deleted component.`, "warn");
+    if (contextMenu.type === "node") {
+      setNodes((nds) => nds.filter((n) => n.id !== contextMenu.id));
+      setEdges((eds) =>
+        eds.filter(
+          (e) => e.source !== contextMenu.id && e.target !== contextMenu.id,
+        ),
+      );
+      if (selectedNodeId === contextMenu.id) setSelectedNodeId(null);
+      addLog(`🗑️ Deleted component.`, "warn");
+    } else if (contextMenu.type === "edge") {
+      setEdges((eds) => eds.filter((e) => e.id !== contextMenu.id));
+      addLog(`🗑️ Deleted connection.`, "warn");
+    }
     setContextMenu(null);
   };
 
@@ -669,6 +949,33 @@ function CloudForgeEditor({
     addLog(`➕ Added S3 Bucket.`, "info");
   };
 
+  const addNewIAMNode = (type) => {
+    takeSnapshot();
+    const nodeData = {
+      label: `new-${type.toLowerCase()}-${Math.floor(Math.random() * 1000)}`,
+      iamType: type,
+      region: "global",
+    };
+
+    if (type === "Role") {
+      nodeData.roleService = "ec2.amazonaws.com";
+    } else if (type === "Policy") {
+      nodeData.policyActions = "s3:*";
+      nodeData.policyResource = "*";
+    }
+
+    const newNode = {
+      id: `iam_${type.toLowerCase()}_${Date.now()}`,
+      type: type === "Group" ? "iamGroupNode" : "iamNode",
+      data: nodeData,
+      position: { x: 120 + Math.random() * 200, y: 120 + Math.random() * 200 },
+      zIndex: type === "Group" ? -1 : 0,
+      ...(type === "Group" && { style: { width: 300, height: 200 } }),
+    };
+    setNodes((nds) => nds.concat(newNode));
+    addLog(`➕ Added IAM ${type}.`, "info");
+  };
+
   const addNewShape = (type) => {
     takeSnapshot();
     const isContainer = type === "Rectangle" || type === "Circle";
@@ -696,7 +1003,7 @@ function CloudForgeEditor({
   };
 
   const compileTerraform = async () => {
-    const awsNodes = nodes.filter((n) => n.type === "s3Node");
+    const awsNodes = nodes.filter((n) => n.type === "s3Node" || n.type === "iamNode");
     if (awsNodes.length === 0) {
       addLog("⚠️ Cannot synthesize environment without AWS resources.", "warn");
       return;
@@ -710,9 +1017,15 @@ function CloudForgeEditor({
         body: JSON.stringify({
           nodes: awsNodes.map((n) => ({
             id: n.id,
-            type: "s3Node",
+            type: n.type,
             data: n.data,
           })),
+          edges: edges
+            .filter((e) => awsNodes.some((n) => n.id === e.source) && awsNodes.some((n) => n.id === e.target))
+            .map((e) => ({
+              source: e.source,
+              target: e.target,
+            })),
         }),
       });
       if (!response.ok) throw new Error(`Server status ${response.status}`);
@@ -778,10 +1091,12 @@ function CloudForgeEditor({
           onConnect={onConnect}
           onReconnect={onReconnect} // ACTIVE EDGE REROUTING LISTENER
           onNodeDragStart={onNodeDragStart}
+          onNodeDragStop={onNodeDragStop}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
           onNodeContextMenu={onNodeContextMenu}
           onPaneContextMenu={onPaneContextMenu}
+          onEdgeContextMenu={onEdgeContextMenu}
           connectionMode={ConnectionMode.Loose}
           defaultEdgeOptions={{
             style: { strokeWidth: 2, stroke: "#94a3b8" },
@@ -793,7 +1108,7 @@ function CloudForgeEditor({
           proOptions={{ hideAttribution: true }}
         >
           <Background
-            color={userSettings.theme === "dark" ? "#27272a" : "#cbd5e1"}
+            color={userSettings.theme === "dark" ? "#27272a" : userSettings.theme === "forest" ? "#3C5148" : "#cbd5e1"}
             gap={24}
             size={1.5}
           />
@@ -1030,6 +1345,92 @@ function CloudForgeEditor({
             </div>
           </div>
 
+          {/* CATEGORY: IAM */}
+          <div className="flex flex-col gap-1 mb-2">
+            <button
+              onClick={() => toggleCategory("iam")}
+              className="flex items-center gap-2 px-2 py-2 w-full hover:bg-slate-100 dark:hover:bg-zinc-800/50 rounded-lg transition-colors text-left group"
+            >
+              <ChevronRight
+                size={14}
+                className={`text-slate-400 dark:text-zinc-500 transition-transform duration-200 ${expandedCategories.iam ? "rotate-90" : ""}`}
+              />
+              <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider group-hover:text-slate-900 dark:group-hover:text-zinc-200 transition-colors">
+                IAM
+              </span>
+            </button>
+            <div
+              className={`flex flex-col gap-2 overflow-hidden transition-all duration-300 ease-in-out origin-top ${expandedCategories.iam ? "max-h-96 opacity-100 scale-y-100 mt-1" : "max-h-0 opacity-0 scale-y-0"}`}
+            >
+              <div className="pl-6 pr-2 pb-1 flex flex-col gap-2">
+                <button
+                  onClick={() => addNewIAMNode("User")}
+                  className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
+                      <User size={14} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
+                      IAM User
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
+                    + Add
+                  </span>
+                </button>
+                <button
+                  onClick={() => addNewIAMNode("Group")}
+                  className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
+                      <Users size={14} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
+                      IAM Group
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
+                    + Add
+                  </span>
+                </button>
+                <button
+                  onClick={() => addNewIAMNode("Role")}
+                  className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
+                      <Shield size={14} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
+                      IAM Role
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
+                    + Add
+                  </span>
+                </button>
+                <button
+                  onClick={() => addNewIAMNode("Policy")}
+                  className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
+                      <Key size={14} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
+                      IAM Policy
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
+                    + Add
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* CATEGORY: SHAPES */}
           <div className="flex flex-col gap-1">
             <button
@@ -1103,13 +1504,17 @@ function CloudForgeEditor({
                 className={
                   selectedNode.type === "s3Node"
                     ? "text-amber-500"
-                    : "text-blue-500"
+                    : selectedNode.type === "iamNode"
+                      ? "text-violet-500"
+                      : "text-blue-500"
                 }
               />
               <h2 className="font-bold text-xs text-slate-800 dark:text-zinc-200 uppercase tracking-wider">
                 {selectedNode.type === "s3Node"
                   ? "AWS Resource Settings"
-                  : "Shape Properties"}
+                  : selectedNode.type === "iamNode"
+                    ? "IAM Settings"
+                    : "Shape Properties"}
               </h2>
             </div>
 
@@ -1124,6 +1529,67 @@ function CloudForgeEditor({
                 className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 font-mono transition-colors shadow-inner"
               />
             </div>
+
+            {selectedNode.type === "iamNode" && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                    IAM Type
+                  </label>
+                  <div className="w-full h-10 px-3 bg-slate-100 dark:bg-zinc-800 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 flex items-center shadow-inner">
+                    {selectedNode.data?.iamType}
+                  </div>
+                </div>
+
+                {selectedNode.data?.iamType === "Role" && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                      Trust Service
+                    </label>
+                    <CustomSelect
+                      value={selectedNode.data?.roleService || "ec2.amazonaws.com"}
+                      onChange={(val) => updateNodeData("roleService", val)}
+                      className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
+                      options={[
+                        { value: "ec2.amazonaws.com", label: "EC2 (ec2.amazonaws.com)" },
+                        { value: "lambda.amazonaws.com", label: "Lambda (lambda.amazonaws.com)" },
+                        { value: "ecs-tasks.amazonaws.com", label: "ECS Tasks (ecs-tasks.amazonaws.com)" },
+                        { value: "apigateway.amazonaws.com", label: "API Gateway (apigateway.amazonaws.com)" },
+                      ]}
+                    />
+                  </div>
+                )}
+
+                {selectedNode.data?.iamType === "Policy" && (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                        Allowed Actions (comma-separated)
+                      </label>
+                      <input
+                        type="text"
+                        value={selectedNode.data?.policyActions || ""}
+                        onChange={(e) => updateNodeData("policyActions", e.target.value)}
+                        placeholder="e.g. s3:*, dynamodb:GetItem"
+                        className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 font-mono transition-colors shadow-inner"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                        Resource ARN
+                      </label>
+                      <input
+                        type="text"
+                        value={selectedNode.data?.policyResource || ""}
+                        onChange={(e) => updateNodeData("policyResource", e.target.value)}
+                        placeholder="e.g. *, arn:aws:s3:::my-bucket/*"
+                        className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 font-mono transition-colors shadow-inner"
+                      />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
 
             {selectedNode.type === "s3Node" && (
               <>
@@ -1146,16 +1612,17 @@ function CloudForgeEditor({
                   <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
                     Target Region
                   </label>
-                  <select
+                  <CustomSelect
                     value={selectedNode.data?.region || "us-east-1"}
-                    onChange={(e) => updateNodeData("region", e.target.value)}
+                    onChange={(val) => updateNodeData("region", val)}
                     className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
-                  >
-                    <option value="us-east-1">US East (N. Virginia)</option>
-                    <option value="us-west-2">US West (Oregon)</option>
-                    <option value="eu-west-1">Europe (Ireland)</option>
-                    <option value="ap-south-1">Asia Pacific (Mumbai)</option>
-                  </select>
+                    options={[
+                      { value: "us-east-1", label: "US East (N. Virginia)" },
+                      { value: "us-west-2", label: "US West (Oregon)" },
+                      { value: "eu-west-1", label: "Europe (Ireland)" },
+                      { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
+                    ]}
+                  />
                 </div>
                 <div className="flex flex-col gap-3 pt-2">
                   <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
@@ -1241,15 +1708,21 @@ function CloudForgeEditor({
                 <div className="flex items-center gap-3 p-1 bg-slate-100 dark:bg-zinc-900 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-inner">
                   <button
                     onClick={() => updateSettings("theme", "light")}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg transition-all ${userSettings.theme === "light" ? "bg-white text-amber-600 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.theme === "light" ? "bg-white text-amber-600 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}
                   >
-                    <Sun size={16} /> Light
+                    <Sun size={14} /> Light
                   </button>
                   <button
                     onClick={() => updateSettings("theme", "dark")}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg transition-all ${userSettings.theme === "dark" ? "bg-zinc-800 text-amber-500 shadow-sm border border-zinc-700" : "text-zinc-400 hover:text-zinc-200"}`}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.theme === "dark" ? "bg-zinc-800 text-amber-500 shadow-sm border border-zinc-700" : "text-zinc-400 hover:text-zinc-200"}`}
                   >
-                    <Moon size={16} /> Dark
+                    <Moon size={14} /> Dark
+                  </button>
+                  <button
+                    onClick={() => updateSettings("theme", "forest")}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.theme === "forest" ? "bg-[#3C5148] text-[#D5DDDF] shadow-sm border border-[#6B8E4E]" : "text-slate-500 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
+                  >
+                    <Sparkles size={14} /> Forest
                   </button>
                 </div>
               </div>
@@ -1292,18 +1765,19 @@ function CloudForgeEditor({
                   <label className="text-[11px] font-bold font-mono text-slate-500 dark:text-zinc-500 uppercase">
                     Default Deployment Region
                   </label>
-                  <select
+                  <CustomSelect
                     value={userSettings.defaultRegion}
-                    onChange={(e) =>
-                      updateSettings("defaultRegion", e.target.value)
+                    onChange={(val) =>
+                      updateSettings("defaultRegion", val)
                     }
                     className="w-full h-11 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-bold text-slate-800 dark:text-zinc-100 rounded-xl border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
-                  >
-                    <option value="us-east-1">US East (N. Virginia)</option>
-                    <option value="us-west-2">US West (Oregon)</option>
-                    <option value="eu-west-1">Europe (Ireland)</option>
-                    <option value="ap-south-1">Asia Pacific (Mumbai)</option>
-                  </select>
+                    options={[
+                      { value: "us-east-1", label: "US East (N. Virginia)" },
+                      { value: "us-west-2", label: "US West (Oregon)" },
+                      { value: "eu-west-1", label: "Europe (Ireland)" },
+                      { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
+                    ]}
+                  />
                 </div>
               </div>
             </div>
@@ -1375,14 +1849,34 @@ function CloudForgeEditor({
               </button>
             </>
           )}
-          {contextMenu.type === "pane" && (
+          {contextMenu.type === "edge" && (
             <button
-              onClick={handlePaste}
-              disabled={!clipboard}
-              className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${clipboard ? "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white" : "text-slate-400 dark:text-zinc-600 cursor-not-allowed"}`}
+              onClick={handleDelete}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-left font-bold transition-colors"
             >
-              <ClipboardPaste size={14} /> Paste Node
+              <Trash2 size={14} /> Delete Connection
             </button>
+          )}
+          {contextMenu.type === "pane" && (
+            <>
+              <button
+                onClick={handlePaste}
+                disabled={!clipboard}
+                className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${clipboard ? "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white" : "text-slate-400 dark:text-zinc-600 cursor-not-allowed"}`}
+              >
+                <ClipboardPaste size={14} /> Paste Node
+              </button>
+              <div className="h-px bg-slate-100 dark:bg-zinc-800 my-1"></div>
+              <button
+                onClick={() => {
+                  clearCanvas();
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-left font-bold transition-colors"
+              >
+                <Trash2 size={14} /> Clear Canvas
+              </button>
+            </>
           )}
         </div>
       )}
@@ -1411,13 +1905,13 @@ function CloudForgeEditor({
               </pre>
             </div>
             <div className="p-4 border-t border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/30 flex justify-between items-center">
-              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-500 text-[11px] font-bold font-mono">
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 text-[11px] font-bold font-mono">
                 <CheckCircle2 size={14} /> Schema mapped securely.
               </div>
               <div className="flex items-center gap-3">
                 <button
                   onClick={copyCodeToClipboard}
-                  className={`flex items-center gap-1.5 px-4 h-10 text-xs font-bold rounded-xl transition-all border shadow-sm ${isCopied ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20" : "bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-300 dark:border-zinc-800"}`}
+                  className={`flex items-center gap-1.5 px-4 h-10 text-xs font-bold rounded-xl transition-all border shadow-sm ${isCopied ? "bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 border-amber-200 dark:border-amber-500/20" : "bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-300 dark:border-zinc-800"}`}
                 >
                   {isCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
                   {isCopied ? "Copied" : "Copy Code"}
@@ -1452,10 +1946,11 @@ export default function App() {
   });
 
   useEffect(() => {
+    document.documentElement.classList.remove("dark", "forest");
     if (userSettings.theme === "dark") {
       document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
+    } else if (userSettings.theme === "forest") {
+      document.documentElement.classList.add("forest");
     }
   }, [userSettings.theme]);
 
@@ -1532,7 +2027,7 @@ export default function App() {
 
   return (
     <div
-      className={`transition-colors duration-300 ${userSettings.theme === "dark" ? "dark" : ""}`}
+      className={`transition-colors duration-300 ${userSettings.theme === "dark" ? "dark" : userSettings.theme === "forest" ? "forest" : ""}`}
     >
       <ReactFlowProvider>
         <CloudForgeEditor
