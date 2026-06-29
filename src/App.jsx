@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -58,6 +58,7 @@ import {
   Coins,
   Maximize2,
   Edit,
+  Upload,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
@@ -1421,11 +1422,10 @@ function CloudForgeEditor({
                           e.preventDefault();
                           handleFocusNode(res.id);
                         }}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm font-medium transition-colors ${
-                          index === searchActiveIndex
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm font-medium transition-colors ${index === searchActiveIndex
                             ? "bg-slate-100 dark:bg-zinc-800 text-slate-900 dark:text-white font-bold"
                             : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"
-                        }`}
+                          }`}
                       >
                         {res.type === "s3Node" ? (
                           <Database
@@ -1495,7 +1495,7 @@ function CloudForgeEditor({
                   className={`text-slate-400 dark:text-zinc-500 transition-transform duration-200 ${expandedCategories.aws ? "rotate-90" : ""}`}
                 />
                 <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider group-hover:text-slate-900 dark:group-hover:text-zinc-200 transition-colors">
-                  AWS Resources
+                  Storage
                 </span>
               </button>
               <div
@@ -2185,6 +2185,7 @@ const ProjectsDashboard = ({
   onDeleteProject,
   onUpdateProjectsDir,
   onCreateProject,
+  onImportProject,
   userSettings
 }) => {
   const [editingId, setEditingId] = useState(null);
@@ -2193,6 +2194,7 @@ const ProjectsDashboard = ({
   const [dirInput, setDirInput] = useState(projectsDir);
   const [newProjName, setNewProjName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     setDirInput(projectsDir);
@@ -2214,8 +2216,57 @@ const ProjectsDashboard = ({
     }
   };
 
+  const handleImportClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result;
+        if (typeof content !== 'string') return;
+        const project = JSON.parse(content);
+
+        if (!project.name) {
+          alert("Invalid project file: missing 'name' attribute.");
+          return;
+        }
+
+        if (!project.id) {
+          project.id = `proj_${Date.now()}`;
+        }
+        if (!project.nodes) {
+          project.nodes = [];
+        }
+        if (!project.edges) {
+          project.edges = [];
+        }
+
+        onImportProject(project);
+      } catch (err) {
+        alert("Failed to parse project file. Make sure it is valid JSON.");
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   return (
     <div className={`min-h-screen w-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-100 flex flex-col p-8 transition-colors duration-300 font-sans antialiased overflow-y-auto ${userSettings.theme === "forest" ? "forest" : ""}`}>
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".json"
+        style={{ display: "none" }}
+      />
       {/* Header bar */}
       <header className="max-w-5xl w-full mx-auto flex items-center justify-between mb-8 pb-5 border-b border-slate-200 dark:border-zinc-800/80">
         <div className="flex items-center gap-3">
@@ -2230,17 +2281,22 @@ const ProjectsDashboard = ({
             <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
               CloudForge Projects Manager
             </h1>
-            <p className="text-xs text-slate-400 dark:text-zinc-500 font-medium uppercase mt-0.5 tracking-wider">
-              Local Filesystem Projects Directory
-            </p>
           </div>
         </div>
-        <button
-          onClick={() => setIsCreating(true)}
-          className="flex items-center gap-2 px-5 h-11 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-md transition-all active:scale-95 cursor-pointer"
-        >
-          <FolderPlus size={16} /> New Project
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleImportClick}
+            className="flex items-center gap-2 px-4 h-11 text-xs font-bold rounded-xl bg-white hover:bg-slate-50 dark:bg-zinc-900 dark:hover:bg-zinc-800/80 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 shadow-sm transition-all active:scale-95 cursor-pointer"
+          >
+            <Upload size={14} /> Import
+          </button>
+          <button
+            onClick={() => setIsCreating(true)}
+            className="flex items-center gap-2 px-5 h-11 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-md transition-all active:scale-95 cursor-pointer"
+          >
+            <FolderPlus size={16} /> New Project
+          </button>
+        </div>
       </header>
 
       {/* Main dashboard content */}
@@ -2329,18 +2385,17 @@ const ProjectsDashboard = ({
               {projects.map((proj) => (
                 <div
                   key={proj.id}
-                  className={`bg-white/80 dark:bg-zinc-900/40 backdrop-blur-xl border p-4 rounded-xl flex items-center justify-between gap-4 hover:border-amber-500/40 transition-all ${
-                    activeProjectId === proj.id
-                      ? "border-amber-500 dark:border-amber-500 bg-amber-50/5 dark:bg-amber-500/5 shadow-md shadow-amber-500/5"
-                      : "border-slate-200 dark:border-zinc-800/80"
-                  }`}
+                  className={`bg-white/80 dark:bg-zinc-900/40 backdrop-blur-xl border p-4 rounded-xl flex items-center justify-between gap-4 transition-all ${activeProjectId === proj.id
+                      ? "border-slate-200 dark:border-zinc-800/80 bg-amber-50/5 dark:bg-amber-500/5 shadow-md shadow-amber-500/5 pl-3"
+                      : "border-slate-200 dark:border-zinc-800/80 hover:border-amber-500/40"
+                    }`}
+                  style={activeProjectId === proj.id ? { borderLeft: '4px solid #f59e0b' } : {}}
                 >
                   <div className="flex items-center gap-3.5 flex-1 min-w-0">
-                    <div className={`p-2.5 rounded-xl ${
-                      activeProjectId === proj.id
+                    <div className={`p-2.5 rounded-xl ${activeProjectId === proj.id
                         ? "bg-amber-500/10 text-amber-600 dark:text-amber-500"
                         : "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500"
-                    }`}>
+                      }`}>
                       <Layers size={18} />
                     </div>
 
@@ -2380,11 +2435,7 @@ const ProjectsDashboard = ({
                           >
                             {proj.name}
                           </h4>
-                          {activeProjectId === proj.id && (
-                            <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-extrabold rounded bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20 shadow-sm shrink-0">
-                              Active
-                            </span>
-                          )}
+                          {/* Active highlight on left edge is sufficient */}
                           <button
                             onClick={() => {
                               setEditingId(proj.id);
@@ -2622,6 +2673,23 @@ export default function App() {
     }
   };
 
+  const handleImportProject = async (projectObj) => {
+    try {
+      const res = await fetch("http://localhost:3001/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(projectObj),
+      });
+      if (res.ok) {
+        await fetchProjectsAndSettings();
+        setActiveProjectId(projectObj.id);
+        setAppState("editor");
+      }
+    } catch (err) {
+      console.error("Error importing project:", err);
+    }
+  };
+
   if (appState === "welcome") {
     return (
       <WelcomeScreen
@@ -2659,6 +2727,7 @@ export default function App() {
         onDeleteProject={handleDeleteProject}
         onUpdateProjectsDir={handleUpdateProjectsDir}
         onCreateProject={handleCreateProject}
+        onImportProject={handleImportProject}
         userSettings={userSettings}
       />
     );

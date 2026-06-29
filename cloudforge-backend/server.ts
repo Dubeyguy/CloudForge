@@ -298,6 +298,17 @@ function setProjectsDir(dir: string) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify({ projectsDir: dir }, null, 2));
 }
 
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9-_]/g, '_');
+}
+
+function getProjectFilePath(dir: string, id: string): string | null {
+  if (!fs.existsSync(dir)) return null;
+  const files = fs.readdirSync(dir);
+  const match = files.find((file) => file.endsWith(`-${id}.json`) || file === `${id}.json`);
+  return match ? path.join(dir, match) : null;
+}
+
 // 1. GET settings
 app.get('/api/settings', (_req, res) => {
   res.json({ projectsDir: getProjectsDir() });
@@ -361,7 +372,15 @@ app.post('/api/projects', (req, res): any => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    const filePath = path.join(dir, `${project.id}.json`);
+    // Delete any old filename version for this project to prevent duplicate files
+    const existingPath = getProjectFilePath(dir, project.id);
+    if (existingPath) {
+      try {
+        fs.unlinkSync(existingPath);
+      } catch (e) {}
+    }
+    const safeName = sanitizeFilename(project.name);
+    const filePath = path.join(dir, `${safeName}-${project.id}.json`);
     project.updatedAt = Date.now();
     fs.writeFileSync(filePath, JSON.stringify(project, null, 2), 'utf-8');
     res.json({ success: true, project });
@@ -378,16 +397,24 @@ app.put('/api/projects/:id', (req, res): any => {
     return res.status(400).json({ error: "Name is required" });
   }
   const dir = getProjectsDir();
-  const filePath = path.join(dir, `${id}.json`);
+  const existingPath = getProjectFilePath(dir, id);
   try {
-    if (!fs.existsSync(filePath)) {
+    if (!existingPath || !fs.existsSync(existingPath)) {
       return res.status(404).json({ error: "Project not found" });
     }
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = fs.readFileSync(existingPath, 'utf-8');
     const project = JSON.parse(content);
     project.name = name;
     project.updatedAt = Date.now();
-    fs.writeFileSync(filePath, JSON.stringify(project, null, 2), 'utf-8');
+
+    // Delete old name file
+    fs.unlinkSync(existingPath);
+
+    // Create new name file
+    const safeName = sanitizeFilename(name);
+    const newPath = path.join(dir, `${safeName}-${id}.json`);
+    fs.writeFileSync(newPath, JSON.stringify(project, null, 2), 'utf-8');
+
     res.json({ success: true, project });
   } catch (err) {
     res.status(500).json({ error: "Failed to rename project", details: String(err) });
@@ -398,9 +425,9 @@ app.put('/api/projects/:id', (req, res): any => {
 app.delete('/api/projects/:id', (req, res): any => {
   const { id } = req.params;
   const dir = getProjectsDir();
-  const filePath = path.join(dir, `${id}.json`);
+  const filePath = getProjectFilePath(dir, id);
   try {
-    if (fs.existsSync(filePath)) {
+    if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
       res.json({ success: true });
     } else {
