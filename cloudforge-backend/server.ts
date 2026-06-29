@@ -20,6 +20,7 @@ import { IamRolePolicyAttachment } from './.gen/providers/aws/iam-role-policy-at
 
 import * as fs from 'fs';
 import * as path from 'path';
+import os from 'os';
 
 const app = express();
 app.use(cors());
@@ -28,6 +29,7 @@ app.use(express.json());
 interface VisualNode {
   id: string;
   type: string;
+  parentId?: string;
   data: {
     label: string;
     region: string;
@@ -80,6 +82,11 @@ class CloudForgeStack extends TerraformStack {
         });
 
         resourceMap.set(node.id, { type: 's3', name: bucket.bucket, ref: bucket });
+      } else if (node.type === 'iamGroupNode') {
+        const group = new IamGroup(this, safeId, {
+          name: labelName,
+        });
+        resourceMap.set(node.id, { type: 'iam', iamType: 'Group', name: labelName, ref: group });
       } else if (node.type === 'iamNode') {
         switch (node.data.iamType) {
           case 'User':
@@ -198,6 +205,34 @@ class CloudForgeStack extends TerraformStack {
       }
     });
 
+    // Automatically add child users to parent groups based on visual nesting (parentId)
+    nodes.forEach((node) => {
+      if (node.parentId) {
+        const parentNode = resourceMap.get(node.parentId);
+        const childNode = resourceMap.get(node.id);
+
+        if (
+          parentNode && 
+          childNode && 
+          parentNode.iamType === 'Group' && 
+          childNode.iamType === 'User'
+        ) {
+          const userRef = childNode.ref as IamUser;
+          const groupName = parentNode.name;
+          const userNodeId = node.id;
+
+          if (!userGroups.has(userNodeId)) {
+            userGroups.set(userNodeId, { userRef, userLabel: childNode.name, groupNames: [] });
+          }
+          
+          const groups = userGroups.get(userNodeId)!.groupNames;
+          if (!groups.includes(groupName)) {
+            groups.push(groupName);
+          }
+        }
+      }
+    });
+
     // Create User-Group memberships
     userGroups.forEach((val, userNodeId) => {
       const safeMembershipId = `membership_${userNodeId}`.replace(/[^a-zA-Z0-9]/g, '');
@@ -236,6 +271,143 @@ app.post('/api/compile', (req, res): any => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Compilation failed", details: String(error) });
+  }
+});
+
+const CONFIG_PATH = path.join(os.homedir(), '.cloudforge-config.json');
+
+function getProjectsDir(): string {
+  if (fs.existsSync(CONFIG_PATH)) {
+    try {
+      const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+      if (config.projectsDir) {
+        return config.projectsDir;
+      }
+    } catch (err) {
+      console.error("Error reading config:", err);
+    }
+  }
+  const defaultDir = path.join(os.homedir(), 'CloudForgeProjects');
+  if (!fs.existsSync(defaultDir)) {
+    fs.mkdirSync(defaultDir, { recursive: true });
+  }
+  return defaultDir;
+}
+
+function setProjectsDir(dir: string) {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify({ projectsDir: dir }, null, 2));
+}
+
+// 1. GET settings
+app.get('/api/settings', (_req, res) => {
+  res.json({ projectsDir: getProjectsDir() });
+});
+
+// 2. POST settings
+app.post('/api/settings', (req, res): any => {
+  const { projectsDir } = req.body;
+  if (!projectsDir) {
+    return res.status(400).json({ error: "projectsDir is required" });
+  }
+  try {
+    const resolvedPath = path.resolve(projectsDir);
+    if (!fs.existsSync(resolvedPath)) {
+      fs.mkdirSync(resolvedPath, { recursive: true });
+    }
+    setProjectsDir(resolvedPath);
+    res.json({ projectsDir: resolvedPath });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to configure projects directory", details: String(err) });
+  }
+});
+
+// 3. GET all projects
+app.get('/api/projects', (_req, res) => {
+  const dir = getProjectsDir();
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const files = fs.readdirSync(dir);
+    const projects: any[] = [];
+    files.forEach((file) => {
+      if (file.endsWith('.json')) {
+        try {
+          const filePath = path.join(dir, file);
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const proj = JSON.parse(content);
+          if (proj.id && proj.name) {
+            projects.push(proj);
+          }
+        } catch (e) {
+          console.warn(`Skipping invalid project file ${file}:`, e);
+        }
+      }
+    });
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to read projects from disk", details: String(err) });
+  }
+});
+
+// 4. POST save/create project
+app.post('/api/projects', (req, res): any => {
+  const project = req.body;
+  if (!project.id || !project.name) {
+    return res.status(400).json({ error: "Project id and name are required" });
+  }
+  const dir = getProjectsDir();
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const filePath = path.join(dir, `${project.id}.json`);
+    project.updatedAt = Date.now();
+    fs.writeFileSync(filePath, JSON.stringify(project, null, 2), 'utf-8');
+    res.json({ success: true, project });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save project to disk", details: String(err) });
+  }
+});
+
+// 5. PUT rename project
+app.put('/api/projects/:id', (req, res): any => {
+  const { id } = req.params;
+  const { name } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: "Name is required" });
+  }
+  const dir = getProjectsDir();
+  const filePath = path.join(dir, `${id}.json`);
+  try {
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const project = JSON.parse(content);
+    project.name = name;
+    project.updatedAt = Date.now();
+    fs.writeFileSync(filePath, JSON.stringify(project, null, 2), 'utf-8');
+    res.json({ success: true, project });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to rename project", details: String(err) });
+  }
+});
+
+// 6. DELETE project
+app.delete('/api/projects/:id', (req, res): any => {
+  const { id } = req.params;
+  const dir = getProjectsDir();
+  const filePath = path.join(dir, `${id}.json`);
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: "Project not found on disk" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete project file", details: String(err) });
   }
 });
 
