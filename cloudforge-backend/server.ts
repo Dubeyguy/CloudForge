@@ -17,6 +17,8 @@ import { IamUserGroupMembership } from './.gen/providers/aws/iam-user-group-memb
 import { IamUserPolicyAttachment } from './.gen/providers/aws/iam-user-policy-attachment';
 import { IamGroupPolicyAttachment } from './.gen/providers/aws/iam-group-policy-attachment';
 import { IamRolePolicyAttachment } from './.gen/providers/aws/iam-role-policy-attachment';
+import { Instance } from './.gen/providers/aws/instance';
+import { IamInstanceProfile } from './.gen/providers/aws/iam-instance-profile';
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -39,6 +41,10 @@ interface VisualNode {
     roleService?: string;
     policyActions?: string;
     policyResource?: string;
+    trustType?: string;
+    trustPrincipal?: string;
+    instanceType?: string;
+    ami?: string;
   };
 }
 
@@ -51,7 +57,10 @@ class CloudForgeStack extends TerraformStack {
   constructor(scope: Construct, id: string, nodes: VisualNode[], edges: VisualEdge[]) {
     super(scope, id);
 
-    const primaryRegion = nodes.length > 0 ? nodes[0].data.region : 'us-east-1';
+    let primaryRegion = nodes.length > 0 ? nodes[0].data.region : 'us-east-1';
+    if (!primaryRegion || primaryRegion === 'global') {
+      primaryRegion = 'us-east-1';
+    }
     new AwsProvider(this, 'AWS', { region: primaryRegion });
 
     const resourceMap = new Map<string, { type: string; iamType?: string; name: string; ref: any }>();
@@ -103,17 +112,30 @@ class CloudForgeStack extends TerraformStack {
             resourceMap.set(node.id, { type: 'iam', iamType: 'Group', name: labelName, ref: group });
             break;
           case 'Role':
+            const trustType = node.data.trustType || 'service';
             const roleService = node.data.roleService || 'ec2.amazonaws.com';
+            const trustPrincipal = node.data.trustPrincipal || '';
+
+            let principal: any = {};
+            let action = 'sts:AssumeRole';
+
+            if (trustType === 'aws_arn') {
+              principal = { AWS: trustPrincipal || '*' };
+            } else if (trustType === 'federated') {
+              principal = { Federated: trustPrincipal || '*' };
+              action = 'sts:AssumeRoleWithWebIdentity';
+            } else {
+              principal = { Service: roleService };
+            }
+
             const role = new IamRole(this, safeId, {
               name: labelName,
               assumeRolePolicy: JSON.stringify({
                 Version: '2012-10-17',
                 Statement: [
                   {
-                    Action: 'sts:AssumeRole',
-                    Principal: {
-                      Service: roleService,
-                    },
+                    Action: action,
+                    Principal: principal,
                     Effect: 'Allow',
                     Sid: '',
                   },
@@ -144,6 +166,17 @@ class CloudForgeStack extends TerraformStack {
             resourceMap.set(node.id, { type: 'iam', iamType: 'Policy', name: labelName, ref: policy });
             break;
         }
+      } else if (node.type === 'ec2Node') {
+        const instanceType = node.data.instanceType || 't2.micro';
+        const ami = node.data.ami || 'ami-0c55b159cbfafe1f0';
+
+        const ec2Instance = new Instance(this, safeId, {
+          ami: ami,
+          instanceType: instanceType,
+          tags: { ManagedBy: 'CloudForge', Name: labelName },
+        });
+
+        resourceMap.set(node.id, { type: 'ec2', name: labelName, ref: ec2Instance });
       }
     });
 
@@ -202,6 +235,31 @@ class CloudForgeStack extends TerraformStack {
             policyArn: policyRef.arn,
           });
         }
+      }
+
+      // Role <-> EC2 Instance mapping
+      if (
+        (sourceNode && targetNode) &&
+        ((sourceNode.iamType === 'Role' && targetNode.type === 'ec2') ||
+         (sourceNode.type === 'ec2' && targetNode.iamType === 'Role'))
+      ) {
+        const roleNode = sourceNode.iamType === 'Role' ? sourceNode : targetNode;
+        const ec2Node = sourceNode.type === 'ec2' ? sourceNode : targetNode;
+        const ec2NodeId = sourceNode.type === 'ec2' ? edge.source : edge.target;
+
+        const roleRef = roleNode.ref as IamRole;
+        const ec2Ref = ec2Node.ref as Instance;
+
+        const safeAttachId = `${ec2NodeId}_role`.replace(/[^a-zA-Z0-9]/g, '');
+
+        // 1. Create IAM Instance Profile
+        const instanceProfile = new IamInstanceProfile(this, `profile_${safeAttachId}`, {
+          name: `${roleRef.name}-profile`,
+          role: roleRef.name,
+        });
+
+        // 2. Attach profile to the EC2 Instance
+        ec2Ref.iamInstanceProfile = instanceProfile.name;
       }
     });
 

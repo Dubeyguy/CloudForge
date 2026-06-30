@@ -59,6 +59,7 @@ import {
   Maximize2,
   Edit,
   Upload,
+  Server,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
@@ -418,7 +419,81 @@ const IAMGroupNode = ({ data, selected }) => {
   );
 };
 
-const nodeTypes = { s3Node: S3Node, shapeNode: ShapeNode, iamNode: IAMNode, iamGroupNode: IAMGroupNode };
+const EC2Node = ({ data }) => {
+  const activeMode = React.useContext(ModeContext);
+  const isBudgetMode = activeMode === "budgets";
+  const cost = data?.cost || 8.50;
+
+  let glowClass = "hover:border-sky-400 dark:hover:border-sky-500/50";
+  let borderClass = "border-slate-200 dark:border-zinc-800";
+  let badgeClass = "bg-slate-50 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border border-slate-100 dark:border-zinc-700/50";
+
+  if (isBudgetMode) {
+    if (cost === 0) {
+      glowClass = "shadow-[0_0_15px_rgba(148,163,184,0.15)] border-slate-300 dark:border-zinc-700";
+      borderClass = "border-slate-300 dark:border-zinc-700";
+      badgeClass = "bg-slate-500/10 text-slate-500 border border-slate-500/20";
+    } else if (cost < 15) {
+      glowClass = "shadow-[0_0_15px_rgba(16,185,129,0.3)] border-emerald-400 dark:border-emerald-500/50";
+      borderClass = "border-emerald-400 dark:border-emerald-500/50";
+      badgeClass = "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20";
+    } else {
+      glowClass = "shadow-[0_0_15px_rgba(234,179,8,0.3)] border-yellow-400 dark:border-yellow-500/50";
+      borderClass = "border-yellow-400 dark:border-yellow-500/50";
+      badgeClass = "bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 border border-yellow-100 dark:border-yellow-500/20";
+    }
+  }
+
+  return (
+    <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all hover:border-sky-400 dark:hover:border-sky-500/50 cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="top"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-sky-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="right"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-sky-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="bottom"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-sky-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="left"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-sky-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
+      />
+
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="p-2 bg-sky-50 dark:bg-sky-500/10 rounded-lg text-sky-600 dark:text-sky-500 border border-sky-100 dark:border-sky-500/20 shadow-inner shrink-0">
+            <Server size={16} />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <h4 className="text-slate-800 dark:text-zinc-100 font-bold text-sm leading-tight tracking-wide truncate">
+              {data?.label || "EC2 Instance"}
+            </h4>
+            <p className="text-slate-400 dark:text-zinc-500 text-[10px] uppercase tracking-widest mt-0.5 font-semibold truncate">
+              Amazon EC2
+            </p>
+          </div>
+        </div>
+        <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded-md shadow-sm transition-colors ${isBudgetMode ? badgeClass : "bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-500/20"}`}>
+          {isBudgetMode ? `$${cost.toFixed(2)}/mo` : (data?.instanceType || "t2.micro")}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const nodeTypes = { s3Node: S3Node, shapeNode: ShapeNode, iamNode: IAMNode, iamGroupNode: IAMGroupNode, ec2Node: EC2Node };
 
 const defaultInitialNodes = [
   {
@@ -645,6 +720,14 @@ function CloudForgeEditor({
   onOpenProjectsDashboard,
 }) {
   const { screenToFlowPosition, fitView, getIntersectingNodes, getNode } = useReactFlow();
+  const reactFlowWrapper = useRef(null);
+  const connectionStartParams = useRef(null);
+  const [floatingConnectionSearch, setFloatingConnectionSearch] = useState(null);
+  const [connectionSearchQuery, setConnectionSearchQuery] = useState("");
+  const [connectionSearchActiveIndex, setConnectionSearchActiveIndex] = useState(0);
+  const connectionSearchRef = useRef(null);
+  const prevConnectionIndex = useRef(0);
+  const prevGlobalIndex = useRef(-1);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(
     activeProject?.nodes || [],
@@ -669,6 +752,7 @@ function CloudForgeEditor({
   const [expandedCategories, setExpandedCategories] = useState({
     aws: true,
     iam: true,
+    compute: true,
     shapes: false,
   });
   const [searchQuery, setSearchQuery] = useState("");
@@ -769,6 +853,209 @@ function CloudForgeEditor({
     [setEdges, takeSnapshot, addLog],
   );
 
+  const onConnectStart = useCallback((event, params) => {
+    connectionStartParams.current = params;
+  }, []);
+
+  const onConnectEnd = useCallback(
+    (event) => {
+      const isOverHandle = event.target.closest('.react-flow__handle');
+      const isOverNode = event.target.closest('.react-flow__node');
+
+      if (!isOverHandle && !isOverNode && connectionStartParams.current) {
+        const { nodeId, handleId, handleType } = connectionStartParams.current;
+
+        // Calculate client coordinates relative to the ReactFlow wrapper
+        const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
+        const clientX = event.clientX;
+        const clientY = event.clientY;
+
+        const position = screenToFlowPosition({
+          x: clientX - reactFlowBounds.left,
+          y: clientY - reactFlowBounds.top,
+        });
+
+        setFloatingConnectionSearch({
+          clientX,
+          clientY,
+          flowX: position.x,
+          flowY: position.y,
+          fromNodeId: nodeId,
+          fromHandleId: handleId,
+          fromHandleType: handleType,
+        });
+        setConnectionSearchQuery("");
+        setConnectionSearchActiveIndex(0);
+      }
+    },
+    [screenToFlowPosition]
+  );
+
+  const handleCreateAndConnect = useCallback((nodeType, labelType) => {
+    if (!floatingConnectionSearch) return;
+
+    const { flowX, flowY, fromNodeId, fromHandleId, fromHandleType } = floatingConnectionSearch;
+    setFloatingConnectionSearch(null);
+    takeSnapshot();
+
+    // Center offset adjustments based on node size
+    let centeredPosition = { x: flowX, y: flowY };
+    if (nodeType === "s3Node" || nodeType === "ec2Node" || (nodeType === "iamNode" && labelType !== "Group")) {
+      centeredPosition.x -= 110;
+      centeredPosition.y -= 35;
+    } else if (nodeType === "iamGroupNode" || labelType === "Group") {
+      centeredPosition.x -= 150;
+      centeredPosition.y -= 100;
+    } else if (nodeType === "shapeNode") {
+      const isContainer = labelType === "Rectangle" || labelType === "Circle";
+      if (isContainer) {
+        centeredPosition.x -= 175;
+        centeredPosition.y -= 175;
+      } else {
+        centeredPosition.x -= 60;
+        centeredPosition.y -= 20;
+      }
+    }
+
+    let newNodeId = "";
+    let newNode = null;
+
+    if (nodeType === "s3Node") {
+      newNodeId = `s3_${Date.now()}`;
+      newNode = {
+        id: newNodeId,
+        type: "s3Node",
+        data: {
+          label: `new-bucket-${Math.floor(Math.random() * 1000)}`,
+          region: userSettings.defaultRegion,
+          isPublic: false,
+          versioning: false,
+          storageGB: 10,
+          cost: 0.23,
+        },
+        position: centeredPosition,
+        zIndex: 0,
+      };
+      addLog(`➕ Added S3 Bucket and Connected.`, "success");
+    } else if (nodeType === "ec2Node") {
+      newNodeId = `ec2_${Date.now()}`;
+      newNode = {
+        id: newNodeId,
+        type: "ec2Node",
+        data: {
+          label: `new-instance-${Math.floor(Math.random() * 1000)}`,
+          region: userSettings.defaultRegion,
+          instanceType: "t2.micro",
+          ami: "ami-0c55b159cbfafe1f0",
+          cost: 8.50,
+        },
+        position: centeredPosition,
+        zIndex: 0,
+      };
+      addLog(`➕ Added EC2 Instance and Connected.`, "success");
+    } else if (nodeType === "iamNode" || nodeType === "iamGroupNode") {
+      const type = labelType;
+      newNodeId = `iam_${type.toLowerCase()}_${Date.now()}`;
+
+      const nodeData = {
+        label: `new-${type.toLowerCase()}-${Math.floor(Math.random() * 1000)}`,
+        iamType: type,
+        region: userSettings.defaultRegion,
+      };
+
+      if (type === "Role") {
+        nodeData.roleService = "ec2.amazonaws.com";
+      } else if (type === "Policy") {
+        nodeData.policyActions = "s3:*";
+        nodeData.policyResource = "*";
+      }
+
+      newNode = {
+        id: newNodeId,
+        type: type === "Group" ? "iamGroupNode" : "iamNode",
+        data: nodeData,
+        position: centeredPosition,
+        zIndex: type === "Group" ? -1 : 0,
+        ...(type === "Group" && { style: { width: 300, height: 200 } }),
+      };
+      addLog(`➕ Added IAM ${type} and Connected.`, "success");
+    } else if (nodeType === "shapeNode") {
+      const type = labelType;
+      newNodeId = `shape_${Date.now()}`;
+      const isContainer = type === "Rectangle" || type === "Circle";
+      newNode = {
+        id: newNodeId,
+        type: "shapeNode",
+        data: {
+          label: isContainer ? `${type} Group` : `${type} Note`,
+          shapeType: type,
+        },
+        position: centeredPosition,
+        zIndex: isContainer ? -1 : 0,
+        style: isContainer ? { width: 350, height: 350 } : {},
+      };
+      addLog(`➕ Added Shape: ${type} and Connected.`, "success");
+    }
+
+    if (newNode) {
+      const newEdge = {
+        id: `e_${Date.now()}`,
+        source: fromHandleType === "source" ? fromNodeId : newNodeId,
+        target: fromHandleType === "source" ? newNodeId : fromNodeId,
+        sourceHandle: fromHandleType === "source" ? fromHandleId : "bottom",
+        targetHandle: fromHandleType === "source" ? "top" : fromHandleId,
+        style: { strokeWidth: 2, stroke: "#94a3b8" },
+      };
+
+      setNodes((nds) => nds.concat(newNode));
+      setEdges((eds) => eds.concat(newEdge));
+    }
+  }, [floatingConnectionSearch, setNodes, setEdges, takeSnapshot, addLog, userSettings.defaultRegion]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        floatingConnectionSearch &&
+        connectionSearchRef.current &&
+        !connectionSearchRef.current.contains(event.target)
+      ) {
+        setFloatingConnectionSearch(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [floatingConnectionSearch]);
+
+  useEffect(() => {
+    if (floatingConnectionSearch) {
+      const activeElem = document.getElementById(`conn-opt-${connectionSearchActiveIndex}`);
+      if (activeElem) {
+        const isCycling = Math.abs(connectionSearchActiveIndex - prevConnectionIndex.current) > 1;
+        activeElem.scrollIntoView({
+          behavior: isCycling ? "auto" : "smooth",
+          block: "nearest",
+        });
+      }
+      prevConnectionIndex.current = connectionSearchActiveIndex;
+    }
+  }, [connectionSearchActiveIndex, floatingConnectionSearch]);
+
+  useEffect(() => {
+    if (isSearchFocused && searchQuery.trim() !== "") {
+      const activeElem = document.getElementById(`global-opt-${searchActiveIndex}`);
+      if (activeElem) {
+        const isCycling = Math.abs(searchActiveIndex - prevGlobalIndex.current) > 1;
+        activeElem.scrollIntoView({
+          behavior: isCycling ? "auto" : "smooth",
+          block: "nearest",
+        });
+      }
+      prevGlobalIndex.current = searchActiveIndex;
+    }
+  }, [searchActiveIndex, isSearchFocused, searchQuery]);
+
   const onNodeDragStart = useCallback(() => {
     takeSnapshot();
   }, [takeSnapshot]);
@@ -827,6 +1114,25 @@ function CloudForgeEditor({
               });
             });
             addLog(`User detached from IAM Group`, "info");
+            return;
+          } else {
+            // Snapped user was moved within the group shape - re-snap it to its grid slot
+            setNodes((nds) => {
+              const children = nds.filter((n) => n.parentId === parentGroupNode.id);
+              return nds.map((n) => {
+                if (n.parentId === parentGroupNode.id) {
+                  const childIndex = children.findIndex(child => child.id === n.id);
+                  const row = Math.floor(childIndex / 2);
+                  const col = childIndex % 2;
+                  return {
+                    ...n,
+                    position: { x: 20 + col * 240, y: 60 + row * 80 }
+                  };
+                }
+                return n;
+              });
+            });
+            addLog(`Snapped user position reset`, "info");
             return;
           }
         }
@@ -1015,6 +1321,12 @@ function CloudForgeEditor({
           const updatedData = { ...node.data, [field]: value };
           if (field === "storageGB")
             updatedData.cost = parseFloat((value * 0.023).toFixed(2));
+          if (field === "instanceType") {
+            let instanceCost = 8.50;
+            if (value === "t2.small") instanceCost = 17.00;
+            else if (value === "t3.medium") instanceCost = 34.00;
+            updatedData.cost = instanceCost;
+          }
           return { ...node, data: updatedData };
         }
         return node;
@@ -1026,70 +1338,309 @@ function CloudForgeEditor({
     setExpandedCategories((prev) => ({ ...prev, [category]: !prev[category] }));
   };
 
-  const addNewS3Node = () => {
+  const spawnNode = useCallback((nodeType, labelType, position) => {
     takeSnapshot();
-    const newNode = {
-      id: `s3_${Date.now()}`,
-      type: "s3Node",
-      data: {
-        label: `new-bucket-${Math.floor(Math.random() * 1000)}`,
-        region: userSettings.defaultRegion,
-        isPublic: false,
-        versioning: false,
-        storageGB: 10,
-        cost: 0.23,
-      },
-      position: { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 },
-      zIndex: 0,
-    };
-    setNodes((nds) => nds.concat(newNode));
-    addLog(`➕ Added S3 Bucket.`, "info");
-  };
-
-  const addNewIAMNode = (type) => {
-    takeSnapshot();
-    const nodeData = {
-      label: `new-${type.toLowerCase()}-${Math.floor(Math.random() * 1000)}`,
-      iamType: type,
-      region: "global",
+    const getNodeDimensions = (type, label) => {
+      if (type === "s3Node" || type === "ec2Node" || type === "iamNode") {
+        return { w: 220, h: 70 };
+      }
+      if (type === "iamGroupNode" || label === "Group") {
+        return { w: 300, h: 200 };
+      }
+      if (type === "shapeNode") {
+        const isContainer = label === "Rectangle" || label === "Circle";
+        return { w: isContainer ? 350 : 120, h: isContainer ? 350 : 40 };
+      }
+      return { w: 220, h: 70 };
     };
 
-    if (type === "Role") {
-      nodeData.roleService = "ec2.amazonaws.com";
-    } else if (type === "Policy") {
-      nodeData.policyActions = "s3:*";
-      nodeData.policyResource = "*";
+    let resolvedPosition = position;
+
+    if (!resolvedPosition) {
+      // Spawn at the center of the currently visible screen viewport
+      const centerFlowPos = screenToFlowPosition({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      });
+
+      const { w, h } = getNodeDimensions(nodeType, labelType);
+      let candidateX = centerFlowPos.x - w / 2;
+      let candidateY = centerFlowPos.y - h / 2;
+
+      const isOverlapping = (rect1, rect2) => {
+        return (
+          rect1.x < rect2.x + rect2.w &&
+          rect1.x + rect1.w > rect2.x &&
+          rect1.y < rect2.y + rect2.h &&
+          rect1.y + rect1.h > rect2.y
+        );
+      };
+
+      const getAbsolutePosition = (n, nds) => {
+        let x = n.position.x;
+        let y = n.position.y;
+        let current = n;
+        while (current.parentId) {
+          const parent = nds.find((p) => p.id === current.parentId);
+          if (!parent) break;
+          x += parent.position.x;
+          y += parent.position.y;
+          current = parent;
+        }
+        return { x, y };
+      };
+
+      let attempts = 0;
+      const maxAttempts = 50;
+
+      while (attempts < maxAttempts) {
+        let overlapFound = false;
+        const candidateRect = { x: candidateX, y: candidateY, w, h };
+
+        for (const existingNode of nodes) {
+          const pos = getAbsolutePosition(existingNode, nodes);
+          const dim = getNodeDimensions(existingNode.type, existingNode.data?.iamType || existingNode.data?.shapeType);
+          const existingRect = { x: pos.x, y: pos.y, w: dim.w, h: dim.h };
+
+          if (isOverlapping(candidateRect, existingRect)) {
+            overlapFound = true;
+            break;
+          }
+        }
+
+        if (!overlapFound) {
+          break;
+        }
+
+        // Shift candidate to the right or wrap down
+        candidateX += 240;
+        if (candidateX > centerFlowPos.x + 800) {
+          candidateX = centerFlowPos.x - w / 2;
+          candidateY += 100;
+        }
+        attempts++;
+      }
+
+      resolvedPosition = { x: candidateX, y: candidateY };
     }
 
-    const newNode = {
-      id: `iam_${type.toLowerCase()}_${Date.now()}`,
-      type: type === "Group" ? "iamGroupNode" : "iamNode",
-      data: nodeData,
-      position: { x: 120 + Math.random() * 200, y: 120 + Math.random() * 200 },
-      zIndex: type === "Group" ? -1 : 0,
-      ...(type === "Group" && { style: { width: 300, height: 200 } }),
-    };
-    setNodes((nds) => nds.concat(newNode));
-    addLog(`➕ Added IAM ${type}.`, "info");
+    let newNode = null;
+
+    if (nodeType === "s3Node") {
+      newNode = {
+        id: `s3_${Date.now()}`,
+        type: "s3Node",
+        data: {
+          label: `new-bucket-${Math.floor(Math.random() * 1000)}`,
+          region: userSettings.defaultRegion,
+          isPublic: false,
+          versioning: false,
+          storageGB: 10,
+          cost: 0.23,
+        },
+        position: resolvedPosition,
+        zIndex: 0,
+      };
+      addLog(`➕ Added S3 Bucket.`, "info");
+    } else if (nodeType === "ec2Node") {
+      newNode = {
+        id: `ec2_${Date.now()}`,
+        type: "ec2Node",
+        data: {
+          label: `new-instance-${Math.floor(Math.random() * 1000)}`,
+          region: userSettings.defaultRegion,
+          instanceType: "t2.micro",
+          ami: "ami-0c55b159cbfafe1f0",
+          cost: 8.50,
+        },
+        position: resolvedPosition,
+        zIndex: 0,
+      };
+      addLog(`➕ Added EC2 Instance.`, "info");
+    } else if (nodeType === "iamNode" || nodeType === "iamGroupNode") {
+      const type = labelType; // "User", "Group", "Role", "Policy"
+
+      // Check if dropping a User node inside a Group node
+      let parentGroupId = null;
+      if (type === "User" && position) {
+        const groupNode = nodes.find((n) => {
+          if (n.type !== "iamGroupNode") return false;
+          const gx = n.position.x;
+          const gy = n.position.y;
+          const gw = n.style?.width || 300;
+          const gh = n.style?.height || 200;
+
+          // Compute cursor center (we offset top-left by -110, -35 in onDrop, so add them back)
+          const cx = resolvedPosition.x + 110;
+          const cy = resolvedPosition.y + 35;
+          return cx >= gx && cx <= gx + gw && cy >= gy && cy <= gy + gh;
+        });
+
+        if (groupNode) {
+          parentGroupId = groupNode.id;
+        }
+      }
+
+      if (parentGroupId) {
+        setNodes((nds) => {
+          const currentChildren = nds.filter((n) => n.parentId === parentGroupId);
+          const newChildrenCount = currentChildren.length + 1;
+          const minHeight = 100 + Math.ceil(newChildrenCount / 2) * 80;
+          const minWidth = newChildrenCount > 1 ? 500 : 280;
+
+          const childIndex = currentChildren.length;
+          const row = Math.floor(childIndex / 2);
+          const col = childIndex % 2;
+
+          const nodeData = {
+            label: `new-user-${Math.floor(Math.random() * 1000)}`,
+            iamType: "User",
+            region: userSettings.defaultRegion,
+          };
+
+          const userNode = {
+            id: `iam_user_${Date.now()}`,
+            type: "iamNode",
+            data: nodeData,
+            parentId: parentGroupId,
+            position: { x: 20 + col * 240, y: 60 + row * 80 },
+            zIndex: 0,
+          };
+
+          const updatedNodes = nds.map((n) => {
+            if (n.id === parentGroupId) {
+              const currentHeight = n.style?.height || 200;
+              const currentWidth = n.style?.width || 250;
+              return {
+                ...n,
+                style: {
+                  ...n.style,
+                  height: Math.max(currentHeight, minHeight),
+                  width: Math.max(currentWidth, minWidth),
+                },
+              };
+            }
+            if (n.parentId === parentGroupId) {
+              const idx = currentChildren.findIndex(child => child.id === n.id);
+              const r = Math.floor(idx / 2);
+              const c = idx % 2;
+              return {
+                ...n,
+                position: { x: 20 + c * 240, y: 60 + r * 80 },
+              };
+            }
+            return n;
+          });
+
+          const withoutUser = updatedNodes.filter((n) => n.id !== userNode.id);
+          return [...withoutUser, userNode];
+        });
+        addLog(`➕ Added IAM User (Grouped).`, "success");
+        return;
+      } else {
+        const nodeData = {
+          label: `new-${type.toLowerCase()}-${Math.floor(Math.random() * 1000)}`,
+          iamType: type,
+          region: userSettings.defaultRegion,
+        };
+
+        if (type === "Role") {
+          nodeData.roleService = "ec2.amazonaws.com";
+        } else if (type === "Policy") {
+          nodeData.policyActions = "s3:*";
+          nodeData.policyResource = "*";
+        }
+
+        newNode = {
+          id: `iam_${type.toLowerCase()}_${Date.now()}`,
+          type: type === "Group" ? "iamGroupNode" : "iamNode",
+          data: nodeData,
+          position: resolvedPosition,
+          zIndex: type === "Group" ? -1 : 0,
+          ...(type === "Group" && { style: { width: 300, height: 200 } }),
+        };
+        addLog(`➕ Added IAM ${type}.`, "info");
+      }
+    } else if (nodeType === "shapeNode") {
+      const type = labelType; // "Rectangle", "Circle", "Text"
+      const isContainer = type === "Rectangle" || type === "Circle";
+      newNode = {
+        id: `shape_${Date.now()}`,
+        type: "shapeNode",
+        data: {
+          label: isContainer ? `${type} Group` : `${type} Note`,
+          shapeType: type,
+        },
+        position: resolvedPosition,
+        zIndex: isContainer ? -1 : 0,
+        style: isContainer ? { width: 350, height: 350 } : {},
+      };
+      addLog(`➕ Added Shape: ${type}`, "info");
+    }
+
+    if (newNode) {
+      setNodes((nds) => nds.concat(newNode));
+    }
+  }, [setNodes, takeSnapshot, addLog, userSettings.defaultRegion, nodes]);
+
+  const addNewS3Node = () => spawnNode("s3Node");
+  const addNewEC2Node = () => spawnNode("ec2Node");
+  const addNewIAMNode = (type) => spawnNode(type === "Group" ? "iamGroupNode" : "iamNode", type);
+  const addNewShape = (type) => spawnNode("shapeNode", type);
+
+  const onDragStart = (event, nodeType, labelType) => {
+    event.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, labelType }));
+    event.dataTransfer.effectAllowed = 'move';
   };
 
-  const addNewShape = (type) => {
-    takeSnapshot();
-    const isContainer = type === "Rectangle" || type === "Circle";
-    const newNode = {
-      id: `shape_${Date.now()}`,
-      type: "shapeNode",
-      data: {
-        label: isContainer ? `${type} Group` : `${type} Note`,
-        shapeType: type,
-      },
-      position: { x: 150 + Math.random() * 150, y: 150 + Math.random() * 150 },
-      zIndex: isContainer ? -1 : 0,
-      style: isContainer ? { width: 350, height: 350 } : {},
-    };
-    setNodes((nds) => nds.concat(newNode));
-    addLog(`➕ Added Shape: ${type}`, "info");
-  };
+  const onDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+
+      const rawData = event.dataTransfer.getData('application/reactflow');
+      if (!rawData) return;
+
+      try {
+        const { nodeType, labelType } = JSON.parse(rawData);
+
+        // Get bounding rect of the wrapper to calculate coordinates relative to the flow pane container
+        const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
+        const position = screenToFlowPosition({
+          x: event.clientX - reactFlowBounds.left,
+          y: event.clientY - reactFlowBounds.top,
+        });
+
+        // Center offsets based on node type dimensions to drop exactly under cursor center
+        let centeredPosition = { ...position };
+        if (nodeType === "s3Node" || nodeType === "ec2Node" || (nodeType === "iamNode" && labelType !== "Group")) {
+          centeredPosition.x -= 110;
+          centeredPosition.y -= 35;
+        } else if (nodeType === "iamGroupNode" || labelType === "Group") {
+          centeredPosition.x -= 150;
+          centeredPosition.y -= 100;
+        } else if (nodeType === "shapeNode") {
+          const isContainer = labelType === "Rectangle" || labelType === "Circle";
+          if (isContainer) {
+            centeredPosition.x -= 175;
+            centeredPosition.y -= 175;
+          } else {
+            centeredPosition.x -= 60;
+            centeredPosition.y -= 20;
+          }
+        }
+
+        spawnNode(nodeType, labelType, centeredPosition);
+      } catch (err) {
+        console.error("Failed to process dropped node:", err);
+      }
+    },
+    [screenToFlowPosition, spawnNode, reactFlowWrapper]
+  );
 
   const clearCanvas = () => {
     takeSnapshot();
@@ -1100,7 +1651,7 @@ function CloudForgeEditor({
   };
 
   const compileTerraform = async () => {
-    const awsNodes = nodes.filter((n) => n.type === "s3Node" || n.type === "iamNode" || n.type === "iamGroupNode");
+    const awsNodes = nodes.filter((n) => n.type === "s3Node" || n.type === "iamNode" || n.type === "iamGroupNode" || n.type === "ec2Node");
     if (awsNodes.length === 0) {
       addLog("⚠️ Cannot synthesize environment without AWS resources.", "warn");
       return;
@@ -1186,7 +1737,7 @@ function CloudForgeEditor({
     <ModeContext.Provider value={activeMode}>
       <div className="h-screen w-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-300 font-sans antialiased select-none overflow-hidden relative transition-colors duration-300">
         {/* CANVAS ENGINE */}
-        <main className="absolute inset-0 z-0">
+        <main ref={reactFlowWrapper} className="absolute inset-0 z-0">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1201,6 +1752,10 @@ function CloudForgeEditor({
             onNodeContextMenu={onNodeContextMenu}
             onPaneContextMenu={onPaneContextMenu}
             onEdgeContextMenu={onEdgeContextMenu}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            onConnectStart={onConnectStart}
+            onConnectEnd={onConnectEnd}
             connectionMode={ConnectionMode.Loose}
             defaultEdgeOptions={{
               style: { strokeWidth: 2, stroke: "#94a3b8" },
@@ -1388,12 +1943,16 @@ function CloudForgeEditor({
                   if (e.key === "ArrowDown") {
                     e.preventDefault();
                     if (searchResults.length > 0) {
-                      setSearchActiveIndex((prev) => (prev + 1) % searchResults.length);
+                      setSearchActiveIndex((prev) =>
+                        prev >= searchResults.length - 1 ? 0 : prev + 1
+                      );
                     }
                   } else if (e.key === "ArrowUp") {
                     e.preventDefault();
                     if (searchResults.length > 0) {
-                      setSearchActiveIndex((prev) => (prev - 1 + searchResults.length) % searchResults.length);
+                      setSearchActiveIndex((prev) =>
+                        prev <= 0 ? searchResults.length - 1 : prev - 1
+                      );
                     }
                   } else if (e.key === "Enter") {
                     if (searchResults.length > 0) {
@@ -1413,11 +1972,12 @@ function CloudForgeEditor({
 
               {/* Search Autocomplete Dropdown */}
               {isSearchFocused && searchQuery.trim() !== "" && (
-                <div className="absolute top-full mt-2 w-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-slate-200 dark:border-zinc-800 shadow-xl dark:shadow-2xl rounded-xl py-2 animate-fade-in z-50 max-h-64 overflow-y-auto">
+                <div className="absolute top-full mt-2 w-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-slate-200 dark:border-zinc-800 shadow-xl dark:shadow-2xl rounded-xl py-2 animate-fade-in z-50 max-h-64 overflow-y-auto scroll-smooth">
                   {searchResults.length > 0 ? (
                     searchResults.map((res, index) => (
                       <button
                         key={res.id}
+                        id={`global-opt-${index}`}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           handleFocusNode(res.id);
@@ -1432,6 +1992,16 @@ function CloudForgeEditor({
                             size={16}
                             className="text-amber-500 shrink-0"
                           />
+                        ) : res.type === "iamNode" ? (
+                          <Shield
+                            size={16}
+                            className="text-violet-500 shrink-0"
+                          />
+                        ) : res.type === "ec2Node" ? (
+                          <Server
+                            size={16}
+                            className="text-sky-500 shrink-0"
+                          />
                         ) : (
                           <Square size={16} className="text-blue-500 shrink-0" />
                         )}
@@ -1440,7 +2010,13 @@ function CloudForgeEditor({
                             {res.data?.label || res.id}
                           </span>
                           <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono uppercase mt-0.5 tracking-wider">
-                            {res.type === "s3Node" ? "AWS S3" : "Shape / Group"}
+                            {res.type === "s3Node"
+                              ? "AWS S3"
+                              : res.type === "iamNode"
+                                ? `AWS IAM ${res.data?.iamType || "Resource"}`
+                                : res.type === "ec2Node"
+                                  ? "AWS EC2"
+                                  : "Shape / Group"}
                           </span>
                         </div>
                       </button>
@@ -1504,7 +2080,9 @@ function CloudForgeEditor({
                 <div className="pl-6 pr-2 pb-1">
                   <button
                     onClick={addNewS3Node}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                    draggable={true}
+                    onDragStart={(e) => onDragStart(e, "s3Node")}
+                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-amber-100 dark:bg-amber-500/10 group-hover:bg-amber-200 dark:group-hover:bg-amber-500/20 rounded-md text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20 transition-all">
@@ -1512,6 +2090,46 @@ function CloudForgeEditor({
                       </div>
                       <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
                         S3 Bucket
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
+                      + Add
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* CATEGORY: COMPUTE */}
+            <div className="flex flex-col gap-1 mb-2">
+              <button
+                onClick={() => toggleCategory("compute")}
+                className="flex items-center gap-2 px-2 py-2 w-full hover:bg-slate-100 dark:hover:bg-zinc-800/50 rounded-lg transition-colors text-left group"
+              >
+                <ChevronRight
+                  size={14}
+                  className={`text-slate-400 dark:text-zinc-500 transition-transform duration-200 ${expandedCategories.compute ? "rotate-90" : ""}`}
+                />
+                <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider group-hover:text-slate-900 dark:group-hover:text-zinc-200 transition-colors">
+                  Compute
+                </span>
+              </button>
+              <div
+                className={`flex flex-col gap-2 overflow-hidden transition-all duration-300 ease-in-out origin-top ${expandedCategories.compute ? "max-h-96 opacity-100 scale-y-100 mt-1" : "max-h-0 opacity-0 scale-y-0"}`}
+              >
+                <div className="pl-6 pr-2 pb-1">
+                  <button
+                    onClick={addNewEC2Node}
+                    draggable={true}
+                    onDragStart={(e) => onDragStart(e, "ec2Node")}
+                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-1.5 bg-sky-100 dark:bg-sky-500/10 group-hover:bg-sky-200 dark:group-hover:bg-sky-500/20 rounded-md text-sky-600 dark:text-sky-500 border border-sky-200 dark:border-sky-500/20 transition-all">
+                        <Server size={14} />
+                      </div>
+                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
+                        EC2 Instance
                       </span>
                     </div>
                     <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
@@ -1542,7 +2160,9 @@ function CloudForgeEditor({
                 <div className="pl-6 pr-2 pb-1 flex flex-col gap-2">
                   <button
                     onClick={() => addNewIAMNode("User")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                    draggable={true}
+                    onDragStart={(e) => onDragStart(e, "iamNode", "User")}
+                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
@@ -1558,7 +2178,9 @@ function CloudForgeEditor({
                   </button>
                   <button
                     onClick={() => addNewIAMNode("Group")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                    draggable={true}
+                    onDragStart={(e) => onDragStart(e, "iamGroupNode", "Group")}
+                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
@@ -1574,7 +2196,9 @@ function CloudForgeEditor({
                   </button>
                   <button
                     onClick={() => addNewIAMNode("Role")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                    draggable={true}
+                    onDragStart={(e) => onDragStart(e, "iamNode", "Role")}
+                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
@@ -1590,7 +2214,9 @@ function CloudForgeEditor({
                   </button>
                   <button
                     onClick={() => addNewIAMNode("Policy")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                    draggable={true}
+                    onDragStart={(e) => onDragStart(e, "iamNode", "Policy")}
+                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
@@ -1628,7 +2254,9 @@ function CloudForgeEditor({
                 <div className="pl-6 pr-2 pb-1 flex flex-col gap-2">
                   <button
                     onClick={() => addNewShape("Rectangle")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                    draggable={true}
+                    onDragStart={(e) => onDragStart(e, "shapeNode", "Rectangle")}
+                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-blue-100 dark:bg-blue-500/10 group-hover:bg-blue-200 dark:group-hover:bg-blue-500/20 rounded-md text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20 transition-all">
@@ -1641,7 +2269,9 @@ function CloudForgeEditor({
                   </button>
                   <button
                     onClick={() => addNewShape("Circle")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                    draggable={true}
+                    onDragStart={(e) => onDragStart(e, "shapeNode", "Circle")}
+                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-blue-100 dark:bg-blue-500/10 group-hover:bg-blue-200 dark:group-hover:bg-blue-500/20 rounded-md text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20 transition-all">
@@ -1654,7 +2284,9 @@ function CloudForgeEditor({
                   </button>
                   <button
                     onClick={() => addNewShape("Text")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none"
+                    draggable={true}
+                    onDragStart={(e) => onDragStart(e, "shapeNode", "Text")}
+                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-blue-100 dark:bg-blue-500/10 group-hover:bg-blue-200 dark:group-hover:bg-blue-500/20 rounded-md text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20 transition-all">
@@ -1674,7 +2306,7 @@ function CloudForgeEditor({
         {/* FLOATING RIGHT SIDEBAR */}
         {selectedNode && (
           <aside className="absolute top-24 right-6 bottom-6 w-80 z-30 border border-slate-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl flex flex-col overflow-hidden rounded-2xl shadow-xl dark:shadow-2xl animate-fade-in">
-            <div className="p-5 flex flex-col flex-1 space-y-6 overflow-y-auto custom-scrollbar">
+            <div className="p-5 pb-36 flex flex-col flex-1 space-y-6 overflow-y-auto custom-scrollbar">
               <div className="flex items-center gap-2 border-b border-slate-100 dark:border-zinc-800/80 pb-3">
                 <Settings2
                   size={16}
@@ -1683,15 +2315,19 @@ function CloudForgeEditor({
                       ? "text-amber-500"
                       : selectedNode.type === "iamNode"
                         ? "text-violet-500"
-                        : "text-blue-500"
+                        : selectedNode.type === "ec2Node"
+                          ? "text-sky-500"
+                          : "text-blue-500"
                   }
                 />
                 <h2 className="font-bold text-xs text-slate-800 dark:text-zinc-200 uppercase tracking-wider">
                   {selectedNode.type === "s3Node"
                     ? "S3 Bucket Settings"
                     : selectedNode.type === "iamNode"
-                      ? "User Settings"
-                      : "Group Settings"}
+                      ? `${selectedNode.data?.iamType || "IAM"} Settings`
+                      : selectedNode.type === "ec2Node"
+                        ? "EC2 Instance Settings"
+                        : "Group Settings"}
                 </h2>
               </div>
 
@@ -1719,22 +2355,79 @@ function CloudForgeEditor({
                   </div>
 
                   {selectedNode.data?.iamType === "Role" && (
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
-                        Trust Service
-                      </label>
-                      <CustomSelect
-                        value={selectedNode.data?.roleService || "ec2.amazonaws.com"}
-                        onChange={(val) => updateNodeData("roleService", val)}
-                        className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
-                        options={[
-                          { value: "ec2.amazonaws.com", label: "EC2 (ec2.amazonaws.com)" },
-                          { value: "lambda.amazonaws.com", label: "Lambda (lambda.amazonaws.com)" },
-                          { value: "ecs-tasks.amazonaws.com", label: "ECS Tasks (ecs-tasks.amazonaws.com)" },
-                          { value: "apigateway.amazonaws.com", label: "API Gateway (apigateway.amazonaws.com)" },
-                        ]}
-                      />
-                    </div>
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                          Trust Policy Type
+                        </label>
+                        <CustomSelect
+                          value={selectedNode.data?.trustType || "service"}
+                          onChange={(val) => {
+                            updateNodeData("trustType", val);
+                            if (val === "service") {
+                              updateNodeData("roleService", "ec2.amazonaws.com");
+                            } else {
+                              updateNodeData("roleService", "");
+                            }
+                          }}
+                          className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
+                          options={[
+                            { value: "service", label: "AWS Service" },
+                            { value: "aws_arn", label: "AWS Account / IAM Entity (ARN)" },
+                            { value: "federated", label: "Federated Identity (OIDC/SAML)" },
+                          ]}
+                        />
+                      </div>
+
+                      {(selectedNode.data?.trustType === "service" || !selectedNode.data?.trustType) && (
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                            Trust Service
+                          </label>
+                          <CustomSelect
+                            value={selectedNode.data?.roleService || "ec2.amazonaws.com"}
+                            onChange={(val) => updateNodeData("roleService", val)}
+                            className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
+                            options={[
+                              { value: "ec2.amazonaws.com", label: "EC2 (ec2.amazonaws.com)" },
+                              { value: "lambda.amazonaws.com", label: "Lambda (lambda.amazonaws.com)" },
+                              { value: "ecs-tasks.amazonaws.com", label: "ECS Tasks (ecs-tasks.amazonaws.com)" },
+                              { value: "apigateway.amazonaws.com", label: "API Gateway (apigateway.amazonaws.com)" },
+                            ]}
+                          />
+                        </div>
+                      )}
+
+                      {selectedNode.data?.trustType === "aws_arn" && (
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                            AWS IAM Principal ARN
+                          </label>
+                          <input
+                            type="text"
+                            value={selectedNode.data?.trustPrincipal || ""}
+                            onChange={(e) => updateNodeData("trustPrincipal", e.target.value)}
+                            placeholder="arn:aws:iam::123456789012:root"
+                            className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 font-mono transition-colors shadow-inner"
+                          />
+                        </div>
+                      )}
+
+                      {selectedNode.data?.trustType === "federated" && (
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                            Federated Provider ARN (OIDC/SAML)
+                          </label>
+                          <input
+                            type="text"
+                            value={selectedNode.data?.trustPrincipal || ""}
+                            onChange={(e) => updateNodeData("trustPrincipal", e.target.value)}
+                            placeholder="arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+                            className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 font-mono transition-colors shadow-inner"
+                          />
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {selectedNode.data?.iamType === "Policy" && (
@@ -1765,6 +2458,73 @@ function CloudForgeEditor({
                       </div>
                     </>
                   )}
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                      Region
+                    </label>
+                    <CustomSelect
+                      value={selectedNode.data?.region || "us-east-1"}
+                      onChange={(val) => updateNodeData("region", val)}
+                      className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
+                      options={[
+                        { value: "us-east-1", label: "US East (N. Virginia)" },
+                        { value: "us-west-2", label: "US West (Oregon)" },
+                        { value: "eu-west-1", label: "Europe (Ireland)" },
+                        { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
+                      ]}
+                    />
+                  </div>
+                </>
+              )}
+
+              {selectedNode.type === "ec2Node" && (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                      Instance Type
+                    </label>
+                    <CustomSelect
+                      value={selectedNode.data?.instanceType || "t2.micro"}
+                      onChange={(val) => updateNodeData("instanceType", val)}
+                      className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
+                      options={[
+                        { value: "t2.micro", label: "t2.micro ($8.50/mo)" },
+                        { value: "t2.small", label: "t2.small ($17.00/mo)" },
+                        { value: "t3.medium", label: "t3.medium ($34.00/mo)" },
+                      ]}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                      AMI (Amazon Machine Image)
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedNode.data?.ami || ""}
+                      onChange={(e) => updateNodeData("ami", e.target.value)}
+                      placeholder="e.g. ami-0c55b159cbfafe1f0"
+                      className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 font-mono transition-colors shadow-inner"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                      Region
+                    </label>
+                    <CustomSelect
+                      value={selectedNode.data?.region || "us-east-1"}
+                      onChange={(val) => updateNodeData("region", val)}
+                      className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
+                      options={[
+                        { value: "us-east-1", label: "US East (N. Virginia)" },
+                        { value: "us-west-2", label: "US West (Oregon)" },
+                        { value: "eu-west-1", label: "Europe (Ireland)" },
+                        { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
+                      ]}
+                    />
+                  </div>
                 </>
               )}
 
@@ -1836,6 +2596,27 @@ function CloudForgeEditor({
                 </>
               )}
 
+              {selectedNode.type === "iamGroupNode" && (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                      Region
+                    </label>
+                    <CustomSelect
+                      value={selectedNode.data?.region || "us-east-1"}
+                      onChange={(val) => updateNodeData("region", val)}
+                      className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
+                      options={[
+                        { value: "us-east-1", label: "US East (N. Virginia)" },
+                        { value: "us-west-2", label: "US West (Oregon)" },
+                        { value: "eu-west-1", label: "Europe (Ireland)" },
+                        { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
+                      ]}
+                    />
+                  </div>
+                </>
+              )}
+
               {selectedNode.type === "shapeNode" && (
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl text-blue-700 dark:text-blue-400 text-xs font-medium">
                   Groups & Shapes are visual notes only and will be ignored by the
@@ -1863,7 +2644,7 @@ function CloudForgeEditor({
         {/* SETTINGS MODAL */}
         {isSettingsOpen && (
           <div className="fixed inset-0 bg-slate-900/20 dark:bg-zinc-950/80 backdrop-blur-sm z-[70] flex items-center justify-center p-6 animate-fade-in">
-            <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-md flex flex-col overflow-hidden shadow-2xl">
+            <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-md flex flex-col overflow-visible shadow-2xl">
               <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-zinc-900">
                 <div className="flex items-center gap-3 text-slate-900 dark:text-zinc-100">
                   <Settings size={20} className="text-amber-500" />
@@ -2055,6 +2836,121 @@ function CloudForgeEditor({
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {/* DRAG-TO-CREATE FLOATING CONNECTION SEARCH */}
+        {floatingConnectionSearch && (
+          <div
+            ref={connectionSearchRef}
+            style={{
+              top: Math.min(floatingConnectionSearch.clientY, window.innerHeight - 300),
+              left: Math.min(floatingConnectionSearch.clientX, window.innerWidth - 260),
+            }}
+            className="fixed z-50 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 shadow-2xl rounded-2xl p-2 w-60 animate-fade-in flex flex-col gap-2"
+          >
+            <div className="flex items-center gap-2 border-b border-slate-100 dark:border-zinc-900 pb-2 px-1 pt-1">
+              <Search size={14} className="text-slate-400 dark:text-zinc-500" />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Connect to new..."
+                value={connectionSearchQuery}
+                onChange={(e) => {
+                  setConnectionSearchQuery(e.target.value);
+                  setConnectionSearchActiveIndex(0);
+                }}
+                onKeyDown={(e) => {
+                  const connectionResourceOptions = [
+                    { value: "s3", label: "S3 Bucket", icon: Database, nodeType: "s3Node", labelType: null },
+                    { value: "ec2", label: "EC2 Instance", icon: Server, nodeType: "ec2Node", labelType: null },
+                    { value: "user", label: "IAM User", icon: User, nodeType: "iamNode", labelType: "User" },
+                    { value: "group", label: "IAM Group", icon: Users, nodeType: "iamGroupNode", labelType: "Group" },
+                    { value: "role", label: "IAM Role", icon: Shield, nodeType: "iamNode", labelType: "Role" },
+                    { value: "policy", label: "IAM Policy", icon: Key, nodeType: "iamNode", labelType: "Policy" },
+                    { value: "rect", label: "Rectangle Group", icon: Square, nodeType: "shapeNode", labelType: "Rectangle" },
+                    { value: "circle", label: "Circle Group", icon: CircleIcon, nodeType: "shapeNode", labelType: "Circle" },
+                    { value: "text", label: "Text Label", icon: Type, nodeType: "shapeNode", labelType: "Text" },
+                  ];
+                  const filtered = connectionResourceOptions.filter((opt) =>
+                    opt.label.toLowerCase().includes(connectionSearchQuery.toLowerCase())
+                  );
+
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setConnectionSearchActiveIndex((prev) =>
+                      prev >= filtered.length - 1 ? 0 : prev + 1
+                    );
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setConnectionSearchActiveIndex((prev) =>
+                      prev <= 0 ? filtered.length - 1 : prev - 1
+                    );
+                  } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (filtered[connectionSearchActiveIndex]) {
+                      const selected = filtered[connectionSearchActiveIndex];
+                      handleCreateAndConnect(selected.nodeType, selected.labelType);
+                    }
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setFloatingConnectionSearch(null);
+                  }
+                }}
+                className="w-full bg-transparent text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none placeholder-slate-400 dark:placeholder-zinc-600"
+              />
+            </div>
+            <div className="flex flex-col max-h-48 overflow-y-auto scroll-smooth custom-scrollbar p-0.5 gap-0.5">
+              {(() => {
+                const connectionResourceOptions = [
+                  { value: "s3", label: "S3 Bucket", icon: Database, nodeType: "s3Node", labelType: null },
+                  { value: "ec2", label: "EC2 Instance", icon: Server, nodeType: "ec2Node", labelType: null },
+                  { value: "user", label: "IAM User", icon: User, nodeType: "iamNode", labelType: "User" },
+                  { value: "group", label: "IAM Group", icon: Users, nodeType: "iamGroupNode", labelType: "Group" },
+                  { value: "role", label: "IAM Role", icon: Shield, nodeType: "iamNode", labelType: "Role" },
+                  { value: "policy", label: "IAM Policy", icon: Key, nodeType: "iamNode", labelType: "Policy" },
+                  { value: "rect", label: "Rectangle Group", icon: Square, nodeType: "shapeNode", labelType: "Rectangle" },
+                  { value: "circle", label: "Circle Group", icon: CircleIcon, nodeType: "shapeNode", labelType: "Circle" },
+                  { value: "text", label: "Text Label", icon: Type, nodeType: "shapeNode", labelType: "Text" },
+                ];
+                const filtered = connectionResourceOptions.filter((opt) =>
+                  opt.label.toLowerCase().includes(connectionSearchQuery.toLowerCase())
+                );
+                return (
+                  <>
+                    {filtered.map((opt, idx) => {
+                      const isActive = idx === connectionSearchActiveIndex;
+                      return (
+                        <button
+                          key={opt.value}
+                          id={`conn-opt-${idx}`}
+                          onClick={() => handleCreateAndConnect(opt.nodeType, opt.labelType)}
+                          className={`flex items-center gap-2.5 px-2.5 py-2 w-full text-left text-xs font-bold rounded-lg transition-colors group ${
+                            isActive
+                              ? "bg-slate-100 dark:bg-zinc-900 text-amber-500 dark:text-amber-400"
+                              : "hover:bg-slate-50 dark:hover:bg-zinc-900 text-slate-700 dark:text-zinc-300"
+                          }`}
+                        >
+                          <div className={`p-1 rounded transition-colors ${
+                            isActive
+                              ? "bg-amber-100 dark:bg-amber-500/10 text-amber-500"
+                              : "bg-slate-100 dark:bg-zinc-850 group-hover:bg-amber-100 dark:group-hover:bg-amber-500/10 text-slate-500 dark:text-zinc-400 group-hover:text-amber-500"
+                          }`}>
+                            <opt.icon size={12} />
+                          </div>
+                          <span>{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                    {filtered.length === 0 && (
+                      <div className="text-[10px] text-center text-slate-400 dark:text-zinc-600 py-3 font-semibold">
+                        No resources found
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           </div>
         )}
 
