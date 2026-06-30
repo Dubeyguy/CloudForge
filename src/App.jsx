@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   ReactFlow,
   Background,
@@ -123,10 +123,54 @@ const CustomSelect = ({ value, onChange, options, className }) => {
 // ==========================================
 const ModeContext = React.createContext("dev");
 
+const AuditBadge = ({ data }) => {
+  const activeMode = React.useContext(ModeContext);
+  if (activeMode !== "audit") return null;
+
+  const findings = data?.auditFindings || [];
+  if (findings.length === 0) {
+    return (
+      <span className="absolute -top-2 -right-2 text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded-full shadow-md z-20 border border-white dark:border-zinc-900 bg-emerald-500 text-white">
+        ✓ Secure
+      </span>
+    );
+  }
+
+  const severityCounts = { critical: 0, high: 0, medium: 0, info: 0 };
+  findings.forEach((f) => {
+    severityCounts[f.severity] = (severityCounts[f.severity] || 0) + 1;
+  });
+
+  let badgeColor = "bg-emerald-500 text-white";
+  let label = "✓ Secure";
+
+  if (severityCounts.critical > 0) {
+    badgeColor = "bg-rose-600 text-white animate-pulse";
+    label = `❌ Critical (${severityCounts.critical})`;
+  } else if (severityCounts.high > 0) {
+    badgeColor = "bg-red-500 text-white";
+    label = `⚠️ High (${severityCounts.high})`;
+  } else if (severityCounts.medium > 0) {
+    badgeColor = "bg-amber-500 text-white";
+    label = `⚠️ Warning (${severityCounts.medium})`;
+  } else if (severityCounts.info > 0) {
+    badgeColor = "bg-sky-500 text-white";
+    label = `ℹ️ Info (${severityCounts.info})`;
+  }
+
+  return (
+    <span className={`absolute -top-2 -right-2 text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded-full shadow-md z-20 border border-white dark:border-zinc-900 ${badgeColor}`}>
+      {label}
+    </span>
+  );
+};
+
 const S3Node = ({ data }) => {
   const activeMode = React.useContext(ModeContext);
   const isBudgetMode = activeMode === "budgets";
+  const isAuditMode = activeMode === "audit";
   const cost = data?.cost || 0;
+  const findings = data?.auditFindings || [];
 
   // Heatmap color logic
   let glowClass = "hover:border-amber-400 dark:hover:border-amber-500/50";
@@ -155,10 +199,25 @@ const S3Node = ({ data }) => {
       borderClass = "border-rose-500";
       badgeClass = "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20";
     }
+  } else if (isAuditMode) {
+    if (findings.length === 0) {
+      glowClass = "shadow-[0_0_15px_rgba(16,185,129,0.15)] border-emerald-400 dark:border-emerald-500/30 hover:border-emerald-500";
+      borderClass = "border-emerald-400 dark:border-emerald-500/30";
+    } else {
+      const hasCritical = findings.some((f) => f.severity === "critical" || f.severity === "high");
+      if (hasCritical) {
+        glowClass = "shadow-[0_0_20px_rgba(239,68,68,0.3)] border-rose-500 hover:border-rose-600";
+        borderClass = "border-rose-500";
+      } else {
+        glowClass = "shadow-[0_0_15px_rgba(245,158,11,0.25)] border-amber-500 hover:border-amber-600";
+        borderClass = "border-amber-500";
+      }
+    }
   }
 
   return (
     <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
+      <AuditBadge data={data} />
       <Handle
         type="source"
         position={Position.Top}
@@ -198,11 +257,11 @@ const S3Node = ({ data }) => {
             </p>
           </div>
         </div>
-        <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded-md shadow-sm transition-colors ${isBudgetMode ? badgeClass : (
+        <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded-md shadow-sm transition-colors ${isBudgetMode ? badgeClass : (isAuditMode ? (data?.isPublic ? "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20" : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20") : (
           data?.isPublic
             ? "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20"
             : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20"
-        )
+        ))
           }`}>
           {isBudgetMode ? `$${cost.toFixed(2)}/mo` : (data?.isPublic ? "Public" : "Private")}
         </span>
@@ -214,6 +273,8 @@ const S3Node = ({ data }) => {
 const IAMNode = ({ data }) => {
   const activeMode = React.useContext(ModeContext);
   const isBudgetMode = activeMode === "budgets";
+  const isAuditMode = activeMode === "audit";
+  const findings = data?.auditFindings || [];
 
   const getIcon = () => {
     switch (data?.iamType) {
@@ -230,8 +291,30 @@ const IAMNode = ({ data }) => {
     }
   };
 
+  let borderClass = "border-slate-200 dark:border-zinc-800";
+  let glowClass = "hover:border-violet-400 dark:hover:border-violet-500/50";
+
+  if (isBudgetMode) {
+    borderClass = "border-slate-300 dark:border-zinc-700/50";
+  } else if (isAuditMode) {
+    if (findings.length === 0) {
+      glowClass = "shadow-[0_0_15px_rgba(16,185,129,0.15)] border-emerald-400 dark:border-emerald-500/30 hover:border-emerald-500";
+      borderClass = "border-emerald-400 dark:border-emerald-500/30";
+    } else {
+      const hasCritical = findings.some((f) => f.severity === "critical" || f.severity === "high");
+      if (hasCritical) {
+        glowClass = "shadow-[0_0_20px_rgba(239,68,68,0.3)] border-rose-500 hover:border-rose-600";
+        borderClass = "border-rose-500";
+      } else {
+        glowClass = "shadow-[0_0_15px_rgba(245,158,11,0.25)] border-amber-500 hover:border-amber-600";
+        borderClass = "border-amber-500";
+      }
+    }
+  }
+
   return (
-    <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all hover:border-violet-400 dark:hover:border-violet-500/50 cursor-grab active:cursor-grabbing group relative ${isBudgetMode ? "border-slate-300 dark:border-zinc-700/50" : "border-slate-200 dark:border-zinc-800"}`}>
+    <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
+      <AuditBadge data={data} />
       <Handle
         type="source"
         position={Position.Top}
@@ -422,7 +505,9 @@ const IAMGroupNode = ({ data, selected }) => {
 const EC2Node = ({ data }) => {
   const activeMode = React.useContext(ModeContext);
   const isBudgetMode = activeMode === "budgets";
+  const isAuditMode = activeMode === "audit";
   const cost = data?.cost || 8.50;
+  const findings = data?.auditFindings || [];
 
   let glowClass = "hover:border-sky-400 dark:hover:border-sky-500/50";
   let borderClass = "border-slate-200 dark:border-zinc-800";
@@ -442,10 +527,25 @@ const EC2Node = ({ data }) => {
       borderClass = "border-yellow-400 dark:border-yellow-500/50";
       badgeClass = "bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 border border-yellow-100 dark:border-yellow-500/20";
     }
+  } else if (isAuditMode) {
+    if (findings.length === 0) {
+      glowClass = "shadow-[0_0_15px_rgba(16,185,129,0.15)] border-emerald-400 dark:border-emerald-500/30 hover:border-emerald-500";
+      borderClass = "border-emerald-400 dark:border-emerald-500/30";
+    } else {
+      const hasCritical = findings.some((f) => f.severity === "critical" || f.severity === "high");
+      if (hasCritical) {
+        glowClass = "shadow-[0_0_20px_rgba(239,68,68,0.3)] border-rose-500 hover:border-rose-600";
+        borderClass = "border-rose-500";
+      } else {
+        glowClass = "shadow-[0_0_15px_rgba(245,158,11,0.25)] border-amber-500 hover:border-amber-600";
+        borderClass = "border-amber-500";
+      }
+    }
   }
 
   return (
-    <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all hover:border-sky-400 dark:hover:border-sky-500/50 cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
+    <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
+      <AuditBadge data={data} />
       <Handle
         type="source"
         position={Position.Top}
@@ -728,6 +828,7 @@ function CloudForgeEditor({
   const connectionSearchRef = useRef(null);
   const prevConnectionIndex = useRef(0);
   const prevGlobalIndex = useRef(-1);
+  const connectionMade = useRef(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(
     activeProject?.nodes || [],
@@ -735,10 +836,107 @@ function CloudForgeEditor({
   const [edges, setEdges, onEdgesChange] = useEdgesState(
     activeProject?.edges || [],
   );
+
+  const evaluatedNodes = useMemo(() => {
+    return nodes.map((node) => {
+      const findings = [];
+
+      // S3 rules
+      if (node.type === "s3Node") {
+        if (node.data?.isPublic) {
+          findings.push({
+            ruleId: "S3_PUBLIC_EXPOSURE",
+            severity: "critical",
+            message: `S3 Bucket ${node.data?.label} is publicly accessible to the internet.`,
+            fixable: true,
+          });
+        }
+        if (!node.data?.versioning) {
+          findings.push({
+            ruleId: "S3_VERSIONING_DISABLED",
+            severity: "medium",
+            message: `Versioning is disabled on S3 Bucket ${node.data?.label}.`,
+            fixable: true,
+          });
+        }
+      }
+
+      // EC2 rules
+      if (node.type === "ec2Node") {
+        const hasRoleEdge = edges.some(
+          (edge) =>
+            (edge.source === node.id && nodes.find((n) => n.id === edge.target)?.type === "iamNode" && nodes.find((n) => n.id === edge.target)?.data?.iamType === "Role") ||
+            (edge.target === node.id && nodes.find((n) => n.id === edge.source)?.type === "iamNode" && nodes.find((n) => n.id === edge.source)?.data?.iamType === "Role")
+        );
+        if (!hasRoleEdge) {
+          findings.push({
+            ruleId: "EC2_NO_IAM_ROLE",
+            severity: "high",
+            message: `EC2 Instance ${node.data?.label} has no associated IAM Role.`,
+            fixable: false,
+          });
+        }
+      }
+
+      // IAM rules
+      if (node.type === "iamNode") {
+        const type = node.data?.iamType;
+        if (type === "User" && !node.parentId) {
+          findings.push({
+            ruleId: "IAM_USER_NO_GROUP",
+            severity: "medium",
+            message: `IAM User ${node.data?.label} is not nested inside any IAM Group.`,
+            fixable: false,
+          });
+        }
+        if (type === "Policy" || type === "Role") {
+          // Check wildcard action
+          if (node.data?.policyActions === "*" || node.data?.policyActions === "s3:*") {
+            findings.push({
+              ruleId: "IAM_WILDCARD_ACTION",
+              severity: "critical",
+              message: `IAM Policy ${node.data?.label} grants administrative actions (*).`,
+              fixable: true,
+            });
+          }
+          // Check wildcard resource
+          if (node.data?.policyResource === "*") {
+            findings.push({
+              ruleId: "IAM_WILDCARD_RESOURCE",
+              severity: "high",
+              message: `IAM Policy ${node.data?.label} grants access to wildcard resource (*).`,
+              fixable: true,
+            });
+          }
+        }
+      }
+
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          auditFindings: findings,
+        },
+      };
+    });
+  }, [nodes, edges]);
+
+  const allFindings = useMemo(() => {
+    return evaluatedNodes.flatMap((n) =>
+      (n.data?.auditFindings || []).map((f) => ({
+        ...f,
+        nodeId: n.id,
+        nodeLabel: n.data?.label || n.id,
+        nodeType: n.type,
+      }))
+    );
+  }, [evaluatedNodes]);
+
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const [activeMode, setActiveMode] = useState("dev");
   const [userCollapsedLegend, setUserCollapsedLegend] = useState(false);
+  const [isAuditLegendCollapsed, setIsAuditLegendCollapsed] = useState(true);
 
   const [past, setPast] = useState([]);
   const [future, setFuture] = useState([]);
@@ -839,6 +1037,7 @@ function CloudForgeEditor({
     (params) => {
       takeSnapshot();
       setEdges((eds) => addEdge(params, eds));
+      connectionMade.current = true;
     },
     [setEdges, takeSnapshot],
   );
@@ -849,12 +1048,14 @@ function CloudForgeEditor({
       takeSnapshot();
       setEdges((els) => reconnectEdge(oldEdge, newConnection, els));
       addLog(`🔌 Edge re-routed successfully.`, "info");
+      connectionMade.current = true;
     },
     [setEdges, takeSnapshot, addLog],
   );
 
   const onConnectStart = useCallback((event, params) => {
     connectionStartParams.current = params;
+    connectionMade.current = false;
   }, []);
 
   const onConnectEnd = useCallback(
@@ -862,31 +1063,35 @@ function CloudForgeEditor({
       const isOverHandle = event.target.closest('.react-flow__handle');
       const isOverNode = event.target.closest('.react-flow__node');
 
-      if (!isOverHandle && !isOverNode && connectionStartParams.current) {
-        const { nodeId, handleId, handleType } = connectionStartParams.current;
+      // Use setTimeout so that synchronous onConnect / onReconnect have time to set connectionMade.current to true
+      setTimeout(() => {
+        if (!isOverHandle && !isOverNode && connectionStartParams.current && !connectionMade.current) {
+          const { nodeId, handleId, handleType } = connectionStartParams.current;
 
-        // Calculate client coordinates relative to the ReactFlow wrapper
-        const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
-        const clientX = event.clientX;
-        const clientY = event.clientY;
+          // Calculate client coordinates relative to the ReactFlow wrapper
+          const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
+          const clientX = event.clientX;
+          const clientY = event.clientY;
 
-        const position = screenToFlowPosition({
-          x: clientX - reactFlowBounds.left,
-          y: clientY - reactFlowBounds.top,
-        });
+          const position = screenToFlowPosition({
+            x: clientX - reactFlowBounds.left,
+            y: clientY - reactFlowBounds.top,
+          });
 
-        setFloatingConnectionSearch({
-          clientX,
-          clientY,
-          flowX: position.x,
-          flowY: position.y,
-          fromNodeId: nodeId,
-          fromHandleId: handleId,
-          fromHandleType: handleType,
-        });
-        setConnectionSearchQuery("");
-        setConnectionSearchActiveIndex(0);
-      }
+          setFloatingConnectionSearch({
+            clientX,
+            clientY,
+            flowX: position.x,
+            flowY: position.y,
+            fromNodeId: nodeId,
+            fromHandleId: handleId,
+            fromHandleType: handleType,
+          });
+          setConnectionSearchQuery("");
+          setConnectionSearchActiveIndex(0);
+        }
+        connectionMade.current = false;
+      }, 50);
     },
     [screenToFlowPosition]
   );
@@ -1219,15 +1424,33 @@ function CloudForgeEditor({
     setContextMenu(null);
     setIsProjectDropdownOpen(false);
     setIsSearchFocused(false);
+    setFloatingConnectionSearch(null);
   }, []);
 
   useEffect(() => {
-    const handleClick = () => {
+    const handleClick = (e) => {
       setContextMenu(null);
       setIsProjectDropdownOpen(false);
+      if (
+        connectionSearchRef.current &&
+        !connectionSearchRef.current.contains(e.target) &&
+        !e.target.closest(".react-flow__handle")
+      ) {
+        setFloatingConnectionSearch(null);
+      }
     };
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalEscape = (e) => {
+      if (e.key === "Escape") {
+        setFloatingConnectionSearch(null);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalEscape);
+    return () => window.removeEventListener("keydown", handleGlobalEscape);
   }, []);
 
   const onNodeContextMenu = useCallback((event, node) => {
@@ -1333,6 +1556,30 @@ function CloudForgeEditor({
       }),
     );
   };
+
+  const handleRemediate = useCallback((nodeId, ruleId) => {
+    takeSnapshot();
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.id !== nodeId) return n;
+        const updatedData = { ...n.data };
+        if (ruleId === "S3_PUBLIC_EXPOSURE") {
+          updatedData.isPublic = false;
+          addLog(`🛡️ Remediation: Set S3 Bucket ${n.data?.label} to Private`, "success");
+        } else if (ruleId === "S3_VERSIONING_DISABLED") {
+          updatedData.versioning = true;
+          addLog(`🛡️ Remediation: Enabled Versioning on S3 Bucket ${n.data?.label}`, "success");
+        } else if (ruleId === "IAM_WILDCARD_ACTION") {
+          updatedData.policyActions = "s3:GetObject";
+          addLog(`🛡️ Remediation: Restrained actions to s3:GetObject on Policy ${n.data?.label}`, "success");
+        } else if (ruleId === "IAM_WILDCARD_RESOURCE") {
+          updatedData.policyResource = "arn:aws:s3:::primary-bucket/*";
+          addLog(`🛡️ Remediation: Scoped wildcard resource on Policy ${n.data?.label}`, "success");
+        }
+        return { ...n, data: updatedData };
+      })
+    );
+  }, [setNodes, takeSnapshot, addLog]);
 
   const toggleCategory = (category) => {
     setExpandedCategories((prev) => ({ ...prev, [category]: !prev[category] }));
@@ -1739,7 +1986,7 @@ function CloudForgeEditor({
         {/* CANVAS ENGINE */}
         <main ref={reactFlowWrapper} className="absolute inset-0 z-0">
           <ReactFlow
-            nodes={nodes}
+            nodes={evaluatedNodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -1839,15 +2086,15 @@ function CloudForgeEditor({
                 {activeMode === "dev" && <span>Dev</span>}
               </button>
               <button
-                onClick={() => setActiveMode("security")}
-                className={`flex items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition-all h-8 ${activeMode === "security"
-                  ? "bg-slate-100 dark:bg-zinc-800 text-violet-600 dark:text-violet-500 border border-slate-200/50 dark:border-zinc-700/50 shadow-sm px-3"
-                  : "text-slate-500 dark:text-zinc-400 hover:text-violet-600 dark:hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10 w-8"
+                onClick={() => setActiveMode("audit")}
+                className={`flex items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition-all h-8 ${activeMode === "audit"
+                  ? "bg-slate-100 dark:bg-zinc-800 text-amber-600 dark:text-amber-500 border border-slate-200/50 dark:border-zinc-700/50 shadow-sm px-3"
+                  : "text-slate-500 dark:text-zinc-400 hover:text-amber-600 dark:hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10 w-8"
                   }`}
-                title="Security Mode"
+                title="Audit Mode"
               >
                 <Shield size={14} />
-                {activeMode === "security" && <span>Security</span>}
+                {activeMode === "audit" && <span>Audit</span>}
               </button>
               <button
                 onClick={() => setActiveMode("budgets")}
@@ -3061,6 +3308,144 @@ function CloudForgeEditor({
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Floating Audit Summary Collapsed Badge */}
+        {activeMode === "audit" && isAuditLegendCollapsed && (
+          <button
+            onClick={() => setIsAuditLegendCollapsed(false)}
+            className="absolute bottom-6 z-30 bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl border border-slate-200 dark:border-zinc-800 h-10 px-3 rounded-xl shadow-xl dark:shadow-2xl flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-900 transition-all duration-300 pointer-events-auto select-none font-bold text-xs"
+            style={{ right: selectedNode ? '360px' : '24px' }}
+            title="Expand Audit Summary"
+          >
+            {(() => {
+              const score = Math.max(0, 100 - allFindings.reduce((acc, f) => {
+                const weights = { critical: 25, high: 15, medium: 8, info: 2 };
+                return acc + (weights[f.severity] || 0);
+              }, 0));
+              const strokeColor = score > 80 ? "rgb(16, 185, 129)" : score > 50 ? "rgb(245, 158, 11)" : "rgb(244, 63, 94)";
+              
+              return (
+                <>
+                  <Shield size={16} style={{ color: strokeColor }} />
+                  <span style={{ color: strokeColor }} className="font-mono">
+                    {score}% Compliant
+                  </span>
+                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">
+                    ({allFindings.length} {allFindings.length === 1 ? "Issue" : "Issues"})
+                  </span>
+                </>
+              );
+            })()}
+          </button>
+        )}
+
+        {/* Floating Cloud Audit findings summary panel */}
+        {activeMode === "audit" && !isAuditLegendCollapsed && (
+          <div
+            className="absolute bottom-6 z-30 bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl border border-slate-200 dark:border-zinc-800 p-4 rounded-2xl shadow-xl dark:shadow-2xl flex flex-col gap-3 pointer-events-auto min-w-[320px] max-w-[360px] max-h-[420px] overflow-hidden transition-all duration-300 animate-fade-in"
+            style={{ right: selectedNode ? '360px' : '24px' }}
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-slate-100 dark:border-zinc-900 pb-2">
+              <div className="flex items-center gap-2">
+                <Shield size={16} className="text-amber-500" />
+                <h3 className="text-xs font-bold text-slate-800 dark:text-zinc-200 uppercase tracking-wider">Cloud Audit Findings</h3>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                  allFindings.length === 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500 animate-pulse"
+                }`}>
+                  {allFindings.length} {allFindings.length === 1 ? "Issue" : "Issues"}
+                </span>
+                <button
+                  onClick={() => setIsAuditLegendCollapsed(true)}
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+                  title="Minimize"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Compliance Score Circular Indicator */}
+            {(() => {
+              const score = Math.max(0, 100 - allFindings.reduce((acc, f) => {
+                const weights = { critical: 25, high: 15, medium: 8, info: 2 };
+                return acc + (weights[f.severity] || 0);
+              }, 0));
+              const scoreColor = score > 80 ? "text-emerald-500" : score > 50 ? "text-amber-500" : "text-rose-500";
+              const scoreBg = score > 80 ? "bg-emerald-500/10" : score > 50 ? "bg-amber-500/10" : "bg-rose-500/10";
+              return (
+                <div className="flex items-center justify-between bg-slate-50 dark:bg-zinc-900/50 p-2.5 rounded-xl border border-slate-100 dark:border-zinc-800/80">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-zinc-400">Security Posture Score</span>
+                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${scoreBg} ${scoreColor} font-mono font-black text-xs`}>
+                    <span>{score}%</span>
+                    <span className="text-[10px] uppercase font-bold tracking-widest">{score > 80 ? "Pass" : score > 50 ? "Warn" : "Fail"}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Scrollable Findings list */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-2 pr-1">
+              {allFindings.map((f, idx) => {
+                const badgeStyle = f.severity === "critical" 
+                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20" 
+                  : f.severity === "high" 
+                  ? "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
+                  : f.severity === "medium"
+                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20"
+                  : "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20";
+                return (
+                  <div key={idx} className="flex flex-col gap-1 p-2 bg-slate-50/50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-800/50 rounded-xl">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded-md ${badgeStyle}`}>
+                        {f.severity}
+                      </span>
+                      <span className="text-[9px] font-bold text-slate-400 dark:text-zinc-500 truncate max-w-[150px]">
+                        {f.nodeLabel}
+                      </span>
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-600 dark:text-zinc-400 leading-tight">
+                      {f.message}
+                    </p>
+                    {f.fixable && (
+                      <button
+                        onClick={() => handleRemediate(f.nodeId, f.ruleId)}
+                        className="mt-1 self-end text-[9px] font-extrabold text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 underline underline-offset-2 transition-colors cursor-pointer"
+                      >
+                        Quick Fix
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {allFindings.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-8 text-slate-400 dark:text-zinc-600 gap-1">
+                  <CheckCircle2 size={24} className="text-emerald-500" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider mt-1 text-emerald-500">100% Compliant</span>
+                  <span className="text-[9px] text-center max-w-[200px]">No security or policy violations detected on the canvas.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Remediate All button */}
+            {allFindings.some((f) => f.fixable) && (
+              <button
+                onClick={() => {
+                  allFindings.forEach((f) => {
+                    if (f.fixable) {
+                      handleRemediate(f.nodeId, f.ruleId);
+                    }
+                  });
+                }}
+                className="w-full h-8 flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/10 hover:shadow-amber-500/20 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <Sparkles size={13} />
+                <span>Remediate All Fixable Issues</span>
+              </button>
+            )}
           </div>
         )}
       </div>
