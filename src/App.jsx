@@ -118,6 +118,342 @@ const CustomSelect = ({ value, onChange, options, className }) => {
   );
 };
 
+const VALID_AWS_REGIONS = [
+  "us-east-1", "us-east-2", "us-west-1", "us-west-2",
+  "ca-central-1", "ca-west-1", "sa-east-1",
+  "eu-west-1", "eu-west-2", "eu-west-3", "eu-central-1", "eu-central-2", "eu-south-1", "eu-south-2", "eu-north-1",
+  "ap-south-1", "ap-south-2", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3", "ap-southeast-1", "ap-southeast-2", "ap-southeast-3", "ap-southeast-4", "ap-east-1",
+  "me-south-1", "me-central-1", "af-south-1", "us-gov-west-1", "us-gov-east-1"
+];
+
+const STANDARD_REGIONS = [
+  { value: "us-east-1", label: "US East (N. Virginia)" },
+  { value: "us-west-2", label: "US West (Oregon)" },
+  { value: "eu-west-1", label: "Europe (Ireland)" },
+  { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
+];
+
+const ALL_INSTANCE_TYPES = [
+  // T2 Family (Burstable, Legacy)
+  { value: "t2.nano", label: "t2.nano", family: "General Purpose", cpu: 1, ram: "0.5 GiB", currentGen: true, freeTier: false, legacy: true, pricing: { Linux: 0.0058, Windows: 0.0081, RHEL: 0.0658, UbuntuPro: 0.0076, SUSE: 0.0158 } },
+  { value: "t2.micro", label: "t2.micro", family: "General Purpose", cpu: 1, ram: "1 GiB", currentGen: true, freeTier: true, legacy: true, pricing: { Linux: 0.0116, Windows: 0.0162, RHEL: 0.0716, UbuntuPro: 0.0142, SUSE: 0.0216 } },
+  { value: "t2.small", label: "t2.small", family: "General Purpose", cpu: 1, ram: "2 GiB", currentGen: true, freeTier: false, legacy: true, pricing: { Linux: 0.0230, Windows: 0.0324, RHEL: 0.0830, UbuntuPro: 0.0266, SUSE: 0.0330 } },
+  { value: "t2.medium", label: "t2.medium", family: "General Purpose", cpu: 2, ram: "4 GiB", currentGen: true, freeTier: false, legacy: true, pricing: { Linux: 0.0464, Windows: 0.0648, RHEL: 0.1064, UbuntuPro: 0.0531, SUSE: 0.0564 } },
+  { value: "t2.large", label: "t2.large", family: "General Purpose", cpu: 2, ram: "8 GiB", currentGen: true, freeTier: false, legacy: true, pricing: { Linux: 0.0928, Windows: 0.1296, RHEL: 0.1528, UbuntuPro: 0.1062, SUSE: 0.1028 } },
+  { value: "t2.xlarge", label: "t2.xlarge", family: "General Purpose", cpu: 4, ram: "16 GiB", currentGen: true, freeTier: false, legacy: true, pricing: { Linux: 0.1856, Windows: 0.2592, RHEL: 0.2456, UbuntuPro: 0.2124, SUSE: 0.1956 } },
+  { value: "t2.2xlarge", label: "t2.2xlarge", family: "General Purpose", cpu: 8, ram: "32 GiB", currentGen: true, freeTier: false, legacy: true, pricing: { Linux: 0.3712, Windows: 0.5184, RHEL: 0.4312, UbuntuPro: 0.4248, SUSE: 0.3812 } },
+
+  // T3 Family (Burstable, Current Gen)
+  { value: "t3.nano", label: "t3.nano", family: "General Purpose", cpu: 1, ram: "0.5 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0052, Windows: 0.0079, RHEL: 0.0652, UbuntuPro: 0.0070, SUSE: 0.0152 } },
+  { value: "t3.micro", label: "t3.micro", family: "General Purpose", cpu: 1, ram: "1 GiB", currentGen: true, freeTier: true, legacy: false, pricing: { Linux: 0.0104, Windows: 0.0156, RHEL: 0.0704, UbuntuPro: 0.0130, SUSE: 0.0204 } },
+  { value: "t3.small", label: "t3.small", family: "General Purpose", cpu: 2, ram: "2 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0208, Windows: 0.0312, RHEL: 0.0808, UbuntuPro: 0.0244, SUSE: 0.0308 } },
+  { value: "t3.medium", label: "t3.medium", family: "General Purpose", cpu: 2, ram: "4 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0416, Windows: 0.0624, RHEL: 0.1016, UbuntuPro: 0.0488, SUSE: 0.0516 } },
+  { value: "t3.large", label: "t3.large", family: "General Purpose", cpu: 2, ram: "8 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0832, Windows: 0.1248, RHEL: 0.1432, UbuntuPro: 0.0976, SUSE: 0.0932 } },
+  { value: "t3.xlarge", label: "t3.xlarge", family: "General Purpose", cpu: 4, ram: "16 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.1664, Windows: 0.2496, RHEL: 0.2264, UbuntuPro: 0.1952, SUSE: 0.1764 } },
+  { value: "t3.2xlarge", label: "t3.2xlarge", family: "General Purpose", cpu: 8, ram: "32 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.3328, Windows: 0.4992, RHEL: 0.3928, UbuntuPro: 0.3904, SUSE: 0.3428 } },
+
+  // T4g Family (Burstable, AWS Graviton2)
+  { value: "t4g.nano", label: "t4g.nano", family: "General Purpose", cpu: 2, ram: "0.5 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0042, Windows: null, RHEL: 0.0642, UbuntuPro: 0.0056, SUSE: 0.0142 } },
+  { value: "t4g.micro", label: "t4g.micro", family: "General Purpose", cpu: 2, ram: "1 GiB", currentGen: true, freeTier: true, legacy: false, pricing: { Linux: 0.0084, Windows: null, RHEL: 0.0684, UbuntuPro: 0.0104, SUSE: 0.0184 } },
+  { value: "t4g.small", label: "t4g.small", family: "General Purpose", cpu: 2, ram: "2 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0168, Windows: null, RHEL: 0.0768, UbuntuPro: 0.0196, SUSE: 0.0268 } },
+  { value: "t4g.medium", label: "t4g.medium", family: "General Purpose", cpu: 2, ram: "4 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0336, Windows: null, RHEL: 0.0936, UbuntuPro: 0.0392, SUSE: 0.0436 } },
+  { value: "t4g.large", label: "t4g.large", family: "General Purpose", cpu: 2, ram: "8 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0672, Windows: null, RHEL: 0.1272, UbuntuPro: 0.0784, SUSE: 0.0772 } },
+  { value: "t4g.xlarge", label: "t4g.xlarge", family: "General Purpose", cpu: 4, ram: "16 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.1344, Windows: null, RHEL: 0.1944, UbuntuPro: 0.1568, SUSE: 0.1444 } },
+  { value: "t4g.2xlarge", label: "t4g.2xlarge", family: "General Purpose", cpu: 8, ram: "32 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.2688, Windows: null, RHEL: 0.3288, UbuntuPro: 0.3136, SUSE: 0.2788 } },
+
+  // M5 Family (General Purpose)
+  { value: "m5.large", label: "m5.large", family: "General Purpose", cpu: 2, ram: "8 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0960, Windows: 0.1880, RHEL: 0.1560, UbuntuPro: 0.1160, SUSE: 0.2160 } },
+  { value: "m5.xlarge", label: "m5.xlarge", family: "General Purpose", cpu: 4, ram: "16 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.1920, Windows: 0.3760, RHEL: 0.2520, UbuntuPro: 0.2320, SUSE: 0.3120 } },
+  { value: "m5.2xlarge", label: "m5.2xlarge", family: "General Purpose", cpu: 8, ram: "32 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.3840, Windows: 0.7520, RHEL: 0.4440, UbuntuPro: 0.4640, SUSE: 0.5040 } },
+  { value: "m5.4xlarge", label: "m5.4xlarge", family: "General Purpose", cpu: 16, ram: "64 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.7680, Windows: 1.5040, RHEL: 0.8280, UbuntuPro: 0.9280, SUSE: 0.8880 } },
+
+  // M6g Family (General Purpose, AWS Graviton3)
+  { value: "m6g.large", label: "m6g.large", family: "General Purpose", cpu: 2, ram: "8 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0770, Windows: null, RHEL: 0.1370, UbuntuPro: 0.0930, SUSE: 0.1970 } },
+  { value: "m6g.xlarge", label: "m6g.xlarge", family: "General Purpose", cpu: 4, ram: "16 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.1540, Windows: null, RHEL: 0.2140, UbuntuPro: 0.1860, SUSE: 0.2740 } },
+  { value: "m6g.2xlarge", label: "m6g.2xlarge", family: "General Purpose", cpu: 8, ram: "32 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.3080, Windows: null, RHEL: 0.3680, UbuntuPro: 0.3720, SUSE: 0.4280 } },
+  { value: "m6g.4xlarge", label: "m6g.4xlarge", family: "General Purpose", cpu: 16, ram: "64 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.6160, Windows: null, RHEL: 0.6760, UbuntuPro: 0.7440, SUSE: 0.7360 } },
+
+  // C5 Family (Compute Optimized)
+  { value: "c5.large", label: "c5.large", family: "Compute Optimized", cpu: 2, ram: "4 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0850, Windows: 0.1770, RHEL: 0.1450, UbuntuPro: 0.1050, SUSE: 0.2050 } },
+  { value: "c5.xlarge", label: "c5.xlarge", family: "Compute Optimized", cpu: 4, ram: "8 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.1700, Windows: 0.3540, RHEL: 0.2300, UbuntuPro: 0.2100, SUSE: 0.2900 } },
+  { value: "c5.2xlarge", label: "c5.2xlarge", family: "Compute Optimized", cpu: 8, ram: "16 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.3400, Windows: 0.7080, RHEL: 0.4000, UbuntuPro: 0.4200, SUSE: 0.4600 } },
+  { value: "c5.4xlarge", label: "c5.4xlarge", family: "Compute Optimized", cpu: 16, ram: "32 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.6800, Windows: 1.4160, RHEL: 0.7400, UbuntuPro: 0.8400, SUSE: 0.8000 } },
+
+  // C6g Family (Compute Optimized, AWS Graviton3)
+  { value: "c6g.large", label: "c6g.large", family: "Compute Optimized", cpu: 2, ram: "4 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.0680, Windows: null, RHEL: 0.1280, UbuntuPro: 0.0840, SUSE: 0.1880 } },
+  { value: "c6g.xlarge", label: "c6g.xlarge", family: "Compute Optimized", cpu: 4, ram: "8 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.1360, Windows: null, RHEL: 0.1960, UbuntuPro: 0.1680, SUSE: 0.2560 } },
+  { value: "c6g.2xlarge", label: "c6g.2xlarge", family: "Compute Optimized", cpu: 8, ram: "16 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.2720, Windows: null, RHEL: 0.3320, UbuntuPro: 0.3360, SUSE: 0.3920 } },
+  { value: "c6g.4xlarge", label: "c6g.4xlarge", family: "Compute Optimized", cpu: 16, ram: "32 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.5440, Windows: null, RHEL: 0.6040, UbuntuPro: 0.6720, SUSE: 0.6640 } },
+
+  // R5 Family (Memory Optimized)
+  { value: "r5.large", label: "r5.large", family: "Memory Optimized", cpu: 2, ram: "16 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.1260, Windows: 0.2180, RHEL: 0.1860, UbuntuPro: 0.1460, SUSE: 0.2460 } },
+  { value: "r5.xlarge", label: "r5.xlarge", family: "Memory Optimized", cpu: 4, ram: "32 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.2520, Windows: 0.4360, RHEL: 0.3120, UbuntuPro: 0.2920, SUSE: 0.3720 } },
+  { value: "r5.2xlarge", label: "r5.2xlarge", family: "Memory Optimized", cpu: 8, ram: "64 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.5040, Windows: 0.8720, RHEL: 0.5640, UbuntuPro: 0.5840, SUSE: 0.6240 } },
+  { value: "r5.4xlarge", label: "r5.4xlarge", family: "Memory Optimized", cpu: 16, ram: "128 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 1.0080, Windows: 1.7440, RHEL: 1.0680, UbuntuPro: 1.1680, SUSE: 1.1280 } },
+
+  // R6g Family (Memory Optimized, AWS Graviton3)
+  { value: "r6g.large", label: "r6g.large", family: "Memory Optimized", cpu: 2, ram: "16 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.1010, Windows: null, RHEL: 0.1610, UbuntuPro: 0.1170, SUSE: 0.2210 } },
+  { value: "r6g.xlarge", label: "r6g.xlarge", family: "Memory Optimized", cpu: 4, ram: "32 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.2020, Windows: null, RHEL: 0.2620, UbuntuPro: 0.2340, SUSE: 0.3220 } },
+  { value: "r6g.2xlarge", label: "r6g.2xlarge", family: "Memory Optimized", cpu: 8, ram: "64 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.4040, Windows: null, RHEL: 0.4640, UbuntuPro: 0.4680, SUSE: 0.5240 } },
+  { value: "r6g.4xlarge", label: "r6g.4xlarge", family: "Memory Optimized", cpu: 16, ram: "128 GiB", currentGen: true, freeTier: false, legacy: false, pricing: { Linux: 0.8080, Windows: null, RHEL: 0.8680, UbuntuPro: 0.9360, SUSE: 0.9280 } }
+];
+
+const REGIONAL_MULTIPLIERS = {
+  "us-east-1": 1.00,
+  "us-east-2": 1.05,
+  "us-west-1": 1.20,
+  "us-west-2": 1.10,
+  "eu-west-1": 1.12,
+  "eu-central-1": 1.18,
+  "ap-south-1": 1.15
+};
+
+const OS_IMAGES = [
+  { 
+    id: "amazon-linux-2023", 
+    name: "Amazon Linux 2023 (AL2023)", 
+    platform: "Linux", 
+    defaultAmis: { 
+      "us-east-1": "ami-04b70fa74e45c3917", 
+      "us-east-2": "ami-05d389e10743b881a", 
+      "us-west-1": "ami-038b90a07d27e85c7", 
+      "us-west-2": "ami-03d5c48b0a1d9cad5", 
+      "ap-south-1": "ami-022d03f649d12a49d" 
+    } 
+  },
+  { 
+    id: "ubuntu-24", 
+    name: "Ubuntu Server 24.04 LTS", 
+    platform: "Linux", 
+    defaultAmis: { 
+      "us-east-1": "ami-04a81a99f5ec58529", 
+      "us-east-2": "ami-0904037de8501fd90", 
+      "us-west-1": "ami-053a45df0a698bc08", 
+      "us-west-2": "ami-0606dd43116f5ed57", 
+      "ap-south-1": "ami-0f5ee92e2d63afc18" 
+    } 
+  },
+  { 
+    id: "windows-2022", 
+    name: "Windows Server 2022 Base", 
+    platform: "Windows", 
+    defaultAmis: { 
+      "us-east-1": "ami-03c62377d6118544d", 
+      "us-east-2": "ami-0d65b161df27f8a70", 
+      "us-west-1": "ami-0b92db2d713c7bc37", 
+      "us-west-2": "ami-07971b3e150965e64", 
+      "ap-south-1": "ami-07d0f779774640108" 
+    } 
+  },
+  { 
+    id: "rhel-9", 
+    name: "Red Hat Enterprise Linux 9", 
+    platform: "RHEL", 
+    defaultAmis: { 
+      "us-east-1": "ami-0583d8c7a9c35d7a9", 
+      "us-east-2": "ami-0f2c00a6e76cfb1ef", 
+      "us-west-1": "ami-054965c6cd7c6e4c9", 
+      "us-west-2": "ami-03c004c27a20c3a2f", 
+      "ap-south-1": "ami-0e1d062fe401e4046" 
+    } 
+  },
+  { 
+    id: "suse-15", 
+    name: "SUSE Linux Enterprise Server 15", 
+    platform: "SUSE", 
+    defaultAmis: { 
+      "us-east-1": "ami-0db2fb6d43522f7b8", 
+      "us-east-2": "ami-04e4c360b37dc1d7c", 
+      "us-west-1": "ami-01d89955faad0061e", 
+      "us-west-2": "ami-09cf8f1b63574c8bc", 
+      "ap-south-1": "ami-03b879ec352a979dd" 
+    } 
+  }
+];
+
+const calculateEC2Cost = (instanceType, volumeSize, region, platform) => {
+  const currentInstanceType = instanceType || "t2.micro";
+  const currentVolumeSize = volumeSize || 8;
+  const currentRegion = region || "us-east-1";
+  const currentPlatform = platform || "Linux";
+
+  const matchedType = ALL_INSTANCE_TYPES.find(t => t.value === currentInstanceType);
+  const hourlyPrice = matchedType && matchedType.pricing
+    ? (matchedType.pricing[currentPlatform] !== null ? matchedType.pricing[currentPlatform] : matchedType.pricing["Linux"])
+    : 0.0116;
+
+  const baseCost = (hourlyPrice || 0) * 730;
+  const multiplier = REGIONAL_MULTIPLIERS[currentRegion.toLowerCase()] !== undefined
+    ? REGIONAL_MULTIPLIERS[currentRegion.toLowerCase()]
+    : 1.15;
+
+  const instanceCost = baseCost * multiplier;
+  const storageCost = currentVolumeSize * 0.08;
+  return parseFloat((instanceCost + storageCost).toFixed(2));
+};
+
+
+const RegionSelect = ({ value, onChange, className }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [isCustomMode, setIsCustomMode] = useState(false);
+  const [isInvalid, setIsInvalid] = useState(false);
+  const selectRef = useRef(null);
+  const isCustomInitiated = useRef(false);
+
+  // Sync internal state with value prop
+  useEffect(() => {
+    if (isCustomInitiated.current) {
+      isCustomInitiated.current = false;
+      return;
+    }
+    const isStd = STANDARD_REGIONS.some((opt) => opt.value === value);
+    if (value && !isStd) {
+      // It's a custom region code
+      setIsCustomMode(true);
+      setSearch(value);
+      setIsInvalid(!VALID_AWS_REGIONS.includes(value.toLowerCase()));
+    } else {
+      // It's a standard region or empty
+      setIsCustomMode(false);
+      setIsInvalid(false);
+      const matched = STANDARD_REGIONS.find((opt) => opt.value === value);
+      setSearch(matched ? matched.label : value || "");
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (selectRef.current && !selectRef.current.contains(event.target)) {
+        setIsOpen(false);
+        if (isCustomMode) {
+          commitValue();
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [search, value, isCustomMode]);
+
+  const commitValue = () => {
+    const typedValue = search.trim();
+    if (!typedValue) {
+      onChange("");
+      return;
+    }
+    // If they typed a standard region label or code, map to it
+    const matched = STANDARD_REGIONS.find(
+      (opt) =>
+        opt.label.toLowerCase() === typedValue.toLowerCase() ||
+        opt.value.toLowerCase() === typedValue.toLowerCase()
+    );
+    if (matched) {
+      onChange(matched.value);
+      setIsCustomMode(false);
+    } else {
+      onChange(typedValue);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    if (!isCustomMode) return;
+    const nextVal = e.target.value;
+    setSearch(nextVal);
+    
+    const typed = nextVal.trim().toLowerCase();
+    if (!typed) {
+      setIsInvalid(false);
+    } else {
+      setIsInvalid(!VALID_AWS_REGIONS.includes(typed));
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && isCustomMode) {
+      setIsOpen(false);
+      commitValue();
+      e.target.blur();
+    }
+  };
+
+  const handleInputClick = () => {
+    setIsOpen(!isOpen);
+  };
+
+  return (
+    <div className="relative w-full" ref={selectRef}>
+      <div className="relative">
+        <input
+          type="text"
+          value={search}
+          onChange={handleInputChange}
+          onClick={handleInputClick}
+          onKeyDown={handleKeyDown}
+          readOnly={!isCustomMode}
+          placeholder="Select or enter region..."
+          className={`${className} ${
+            isInvalid
+              ? "border-rose-500 focus:border-rose-500 dark:border-rose-500 focus:ring-1 focus:ring-rose-500"
+              : "focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+          } ${!isCustomMode ? "cursor-pointer select-none" : ""} pr-10`}
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none text-slate-400 dark:text-zinc-500">
+          <ChevronDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </div>
+      </div>
+
+      {isInvalid && (
+        <span className="text-[10px] font-semibold text-rose-500 mt-1 block">
+          ⚠ Invalid AWS Region Code
+        </span>
+      )}
+
+      {isOpen && (
+        <div className="absolute z-[100] top-full left-0 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden py-1 max-h-60 overflow-y-auto">
+          {STANDARD_REGIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                !isCustomMode && value === opt.value
+                  ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 font-bold"
+                  : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              isCustomInitiated.current = true;
+              setIsCustomMode(true);
+              setSearch("");
+              onChange("");
+              setIsOpen(false);
+              setTimeout(() => {
+                const inputEl = selectRef.current?.querySelector("input");
+                if (inputEl) inputEl.focus();
+              }, 50);
+            }}
+            className={`w-full text-left px-3 py-2 text-sm transition-colors border-t border-slate-100 dark:border-zinc-800/80 font-bold ${
+              isCustomMode
+                ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500"
+                : "text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-700 dark:hover:text-white"
+            }`}
+          >
+            Custom Region...
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ==========================================
 // 1. CUSTOM NODES
 // ==========================================
@@ -942,7 +1278,25 @@ function CloudForgeEditor({
   const [future, setFuture] = useState([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isInstanceModalOpen, setIsInstanceModalOpen] = useState(false);
+  const [instanceActiveTab, setInstanceActiveTab] = useState("All");
+  const [instanceSearchQuery, setInstanceSearchQuery] = useState("");
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
+  const [livePricing, setLivePricing] = useState({});
+
+  const fetchPricingForRegion = useCallback(async (regionCode) => {
+    const rCode = (regionCode || "us-east-1").toLowerCase();
+    if (livePricing[rCode]) return;
+
+    try {
+      const res = await fetch(`http://127.0.0.1:3001/api/pricing/ec2?region=${rCode}`);
+      if (!res.ok) throw new Error("Server pricing fetch failed");
+      const data = await res.json();
+      setLivePricing((prev) => ({ ...prev, [rCode]: data }));
+    } catch (err) {
+      console.warn(`Failed to fetch live pricing for region ${rCode}, falling back to static database`, err);
+    }
+  }, [livePricing]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
@@ -1031,6 +1385,43 @@ function CloudForgeEditor({
       return () => clearTimeout(timer);
     }
   }, [activeMode]);
+
+  useEffect(() => {
+    const selectedNodeObj = nodes.find(n => n.id === selectedNodeId);
+    if (selectedNodeObj && selectedNodeObj.type === "ec2Node") {
+      const region = selectedNodeObj.data?.region || "us-east-1";
+      fetchPricingForRegion(region);
+    }
+  }, [selectedNodeId, nodes, fetchPricingForRegion]);
+
+  useEffect(() => {
+    fetchPricingForRegion(userSettings.defaultRegion);
+  }, [userSettings.defaultRegion, fetchPricingForRegion]);
+
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.type === "ec2Node") {
+          const region = (node.data?.region || "us-east-1").toLowerCase();
+          const db = livePricing[region];
+          if (db) {
+            const platform = node.data?.platform || "Linux";
+            const instType = node.data?.instanceType || "t2.micro";
+            const volSize = node.data?.volumeSize || 8;
+            
+            const newCost = calculateEC2Cost(instType, volSize, region, platform, db, true);
+            if (newCost !== node.data?.cost) {
+              return {
+                ...node,
+                data: { ...node.data, cost: newCost },
+              };
+            }
+          }
+        }
+        return node;
+      })
+    );
+  }, [livePricing]);
 
   // CONNECT HANDLER
   const onConnect = useCallback(
@@ -1151,8 +1542,11 @@ function CloudForgeEditor({
           label: `new-instance-${Math.floor(Math.random() * 1000)}`,
           region: userSettings.defaultRegion,
           instanceType: "t2.micro",
-          ami: "ami-0c55b159cbfafe1f0",
-          cost: 8.50,
+          osImage: "amazon-linux-2023",
+          platform: "Linux",
+          ami: OS_IMAGES.find(img => img.id === "amazon-linux-2023")?.defaultAmis[userSettings.defaultRegion.toLowerCase()] || "ami-04b70fa74e45c3917",
+          volumeSize: 8,
+          cost: calculateEC2Cost("t2.micro", 8, userSettings.defaultRegion, "Linux"),
         },
         position: centeredPosition,
         zIndex: 0,
@@ -1542,13 +1936,46 @@ function CloudForgeEditor({
       nds.map((node) => {
         if (node.id === selectedNodeId) {
           const updatedData = { ...node.data, [field]: value };
-          if (field === "storageGB")
+          if (field === "storageGB" && node.type === "s3Node")
             updatedData.cost = parseFloat((value * 0.023).toFixed(2));
-          if (field === "instanceType") {
-            let instanceCost = 8.50;
-            if (value === "t2.small") instanceCost = 17.00;
-            else if (value === "t3.medium") instanceCost = 34.00;
-            updatedData.cost = instanceCost;
+          if (node.type === "ec2Node") {
+            const currentInstanceType = field === "instanceType" ? value : (node.data.instanceType || "t2.micro");
+            const currentVolumeSize = field === "volumeSize" ? value : (node.data.volumeSize || 8);
+            const currentRegion = field === "region" ? value : (node.data.region || "us-east-1");
+            
+            // Resolve OS Image & Platform
+            let currentOsImage = field === "osImage" ? value : (node.data.osImage || "amazon-linux-2023");
+            const activeOs = OS_IMAGES.find(img => img.id === currentOsImage) || OS_IMAGES[0];
+            let currentPlatform = activeOs.platform;
+            updatedData.platform = currentPlatform;
+
+            // Handle custom vs standard AMI ID updates
+            const currentUseCustomAmi = field === "useCustomAmi" ? value : !!node.data.useCustomAmi;
+            let currentAmi = node.data.ami || "ami-04b70fa74e45c3917";
+            
+            if (!currentUseCustomAmi) {
+              currentAmi = activeOs.defaultAmis[currentRegion.toLowerCase()] || activeOs.defaultAmis["us-east-1"] || "ami-04b70fa74e45c3917";
+              updatedData.ami = currentAmi;
+            } else if (field === "ami") {
+              currentAmi = value;
+            }
+
+            const db = livePricing[currentRegion.toLowerCase()] || ALL_INSTANCE_TYPES;
+            const isLive = !!livePricing[currentRegion.toLowerCase()];
+
+            const matchedType = db.find(t => t.value === currentInstanceType);
+            if (currentPlatform === "Windows" && matchedType && matchedType.pricing.Windows === null) {
+              currentOsImage = "amazon-linux-2023";
+              updatedData.osImage = "amazon-linux-2023";
+              currentPlatform = "Linux";
+              updatedData.platform = "Linux";
+              if (!currentUseCustomAmi) {
+                currentAmi = OS_IMAGES[0].defaultAmis[currentRegion.toLowerCase()] || OS_IMAGES[0].defaultAmis["us-east-1"] || "ami-04b70fa74e45c3917";
+                updatedData.ami = currentAmi;
+              }
+            }
+
+            updatedData.cost = calculateEC2Cost(currentInstanceType, currentVolumeSize, currentRegion, currentPlatform, db, isLive);
           }
           return { ...node, data: updatedData };
         }
@@ -1556,6 +1983,7 @@ function CloudForgeEditor({
       }),
     );
   };
+
 
   const handleRemediate = useCallback((nodeId, ruleId) => {
     takeSnapshot();
@@ -1697,8 +2125,11 @@ function CloudForgeEditor({
           label: `new-instance-${Math.floor(Math.random() * 1000)}`,
           region: userSettings.defaultRegion,
           instanceType: "t2.micro",
-          ami: "ami-0c55b159cbfafe1f0",
-          cost: 8.50,
+          osImage: "amazon-linux-2023",
+          platform: "Linux",
+          ami: OS_IMAGES.find(img => img.id === "amazon-linux-2023")?.defaultAmis[userSettings.defaultRegion.toLowerCase()] || "ami-04b70fa74e45c3917",
+          volumeSize: 8,
+          cost: calculateEC2Cost("t2.micro", 8, userSettings.defaultRegion, "Linux"),
         },
         position: resolvedPosition,
         zIndex: 0,
@@ -2710,16 +3141,10 @@ function CloudForgeEditor({
                     <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
                       Region
                     </label>
-                    <CustomSelect
-                      value={selectedNode.data?.region || "us-east-1"}
+                    <RegionSelect
+                      value={selectedNode.data?.region}
                       onChange={(val) => updateNodeData("region", val)}
                       className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
-                      options={[
-                        { value: "us-east-1", label: "US East (N. Virginia)" },
-                        { value: "us-west-2", label: "US West (Oregon)" },
-                        { value: "eu-west-1", label: "Europe (Ireland)" },
-                        { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
-                      ]}
                     />
                   </div>
                 </>
@@ -2732,27 +3157,90 @@ function CloudForgeEditor({
                       Instance Type
                     </label>
                     <CustomSelect
-                      value={selectedNode.data?.instanceType || "t2.micro"}
-                      onChange={(val) => updateNodeData("instanceType", val)}
+                      value={["t2.micro", "t2.small", "t3.medium"].includes(selectedNode.data?.instanceType || "t2.micro") ? (selectedNode.data?.instanceType || "t2.micro") : "custom"}
+                      onChange={(val) => {
+                        if (val === "more") {
+                          setIsInstanceModalOpen(true);
+                        } else {
+                          updateNodeData("instanceType", val);
+                        }
+                      }}
                       className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
                       options={[
                         { value: "t2.micro", label: "t2.micro ($8.50/mo)" },
                         { value: "t2.small", label: "t2.small ($17.00/mo)" },
                         { value: "t3.medium", label: "t3.medium ($34.00/mo)" },
+                        ...(!["t2.micro", "t2.small", "t3.medium"].includes(selectedNode.data?.instanceType || "t2.micro") ? [{ value: "custom", label: `${selectedNode.data?.instanceType} (Selected)` }] : []),
+                        { value: "more", label: "More Instance Types..." },
                       ]}
                     />
                   </div>
 
+                  {!selectedNode.data?.useCustomAmi && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                        OS / Base Image
+                      </label>
+                      <CustomSelect
+                        value={selectedNode.data?.osImage || "amazon-linux-2023"}
+                        onChange={(val) => updateNodeData("osImage", val)}
+                        className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
+                        options={OS_IMAGES.map(img => ({ value: img.id, label: img.name }))}
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 py-0.5">
+                    <input
+                      type="checkbox"
+                      id="useCustomAmi"
+                      checked={!!selectedNode.data?.useCustomAmi}
+                      onChange={(e) => updateNodeData("useCustomAmi", e.target.checked)}
+                      className="rounded border-slate-300 dark:border-zinc-700 text-amber-500 focus:ring-amber-500"
+                    />
+                    <label htmlFor="useCustomAmi" className="text-xs font-semibold text-slate-600 dark:text-zinc-400 select-none cursor-pointer">
+                      Advanced: Use Custom AMI ID
+                    </label>
+                  </div>
+
+                  {selectedNode.data?.useCustomAmi ? (
+                    <div className="flex flex-col gap-1.5 animate-fade-in">
+                      <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                        Custom AMI ID
+                      </label>
+                      <input
+                        type="text"
+                        value={selectedNode.data?.ami || ""}
+                        onChange={(e) => updateNodeData("ami", e.target.value)}
+                        placeholder="e.g. ami-0c55b159cbfafe1f0"
+                        className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 font-mono transition-colors shadow-inner"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5 bg-slate-100/50 dark:bg-zinc-900/30 p-2.5 rounded-xl border border-slate-100 dark:border-zinc-800/60 font-mono">
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 dark:text-zinc-500 font-bold uppercase tracking-wider">
+                        <span>Standard AMI ID</span>
+                        <span className="text-[9px] bg-slate-200 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-extrabold text-slate-500 dark:text-zinc-400">Auto-mapped</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300 mt-1">
+                        {selectedNode.data?.ami || "No AMI mapped for region"}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
-                      AMI (Amazon Machine Image)
+                      Root Volume Size ({selectedNode.data?.volumeSize || 8} GB)
                     </label>
                     <input
-                      type="text"
-                      value={selectedNode.data?.ami || ""}
-                      onChange={(e) => updateNodeData("ami", e.target.value)}
-                      placeholder="e.g. ami-0c55b159cbfafe1f0"
-                      className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 font-mono transition-colors shadow-inner"
+                      type="range"
+                      min="8"
+                      max="2000"
+                      value={selectedNode.data?.volumeSize || 8}
+                      onChange={(e) =>
+                        updateNodeData("volumeSize", parseInt(e.target.value))
+                      }
+                      className="w-full h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
                     />
                   </div>
 
@@ -2760,16 +3248,10 @@ function CloudForgeEditor({
                     <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
                       Region
                     </label>
-                    <CustomSelect
-                      value={selectedNode.data?.region || "us-east-1"}
+                    <RegionSelect
+                      value={selectedNode.data?.region}
                       onChange={(val) => updateNodeData("region", val)}
                       className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
-                      options={[
-                        { value: "us-east-1", label: "US East (N. Virginia)" },
-                        { value: "us-west-2", label: "US West (Oregon)" },
-                        { value: "eu-west-1", label: "Europe (Ireland)" },
-                        { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
-                      ]}
                     />
                   </div>
                 </>
@@ -2796,16 +3278,10 @@ function CloudForgeEditor({
                     <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
                       Target Region
                     </label>
-                    <CustomSelect
-                      value={selectedNode.data?.region || "us-east-1"}
+                    <RegionSelect
+                      value={selectedNode.data?.region}
                       onChange={(val) => updateNodeData("region", val)}
                       className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
-                      options={[
-                        { value: "us-east-1", label: "US East (N. Virginia)" },
-                        { value: "us-west-2", label: "US West (Oregon)" },
-                        { value: "eu-west-1", label: "Europe (Ireland)" },
-                        { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
-                      ]}
                     />
                   </div>
                   <div className="flex flex-col gap-3 pt-2">
@@ -2849,16 +3325,10 @@ function CloudForgeEditor({
                     <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
                       Region
                     </label>
-                    <CustomSelect
-                      value={selectedNode.data?.region || "us-east-1"}
+                    <RegionSelect
+                      value={selectedNode.data?.region}
                       onChange={(val) => updateNodeData("region", val)}
                       className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
-                      options={[
-                        { value: "us-east-1", label: "US East (N. Virginia)" },
-                        { value: "us-west-2", label: "US West (Oregon)" },
-                        { value: "eu-west-1", label: "Europe (Ireland)" },
-                        { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
-                      ]}
                     />
                   </div>
                 </>
@@ -2970,18 +3440,12 @@ function CloudForgeEditor({
                     <label className="text-[11px] font-bold font-mono text-slate-500 dark:text-zinc-500 uppercase">
                       Default Deployment Region
                     </label>
-                    <CustomSelect
+                    <RegionSelect
                       value={userSettings.defaultRegion}
                       onChange={(val) =>
                         updateSettings("defaultRegion", val)
                       }
                       className="w-full h-11 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-bold text-slate-800 dark:text-zinc-100 rounded-xl border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
-                      options={[
-                        { value: "us-east-1", label: "US East (N. Virginia)" },
-                        { value: "us-west-2", label: "US West (Oregon)" },
-                        { value: "eu-west-1", label: "Europe (Ireland)" },
-                        { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
-                      ]}
                     />
                   </div>
                 </div>
@@ -2989,6 +3453,234 @@ function CloudForgeEditor({
             </div>
           </div>
         )}
+
+        {/* MORE INSTANCE TYPES MODAL */}
+        {isInstanceModalOpen && selectedNode && selectedNode.type === "ec2Node" && (() => {
+          const LEGACY_UNAVAILABLE_REGIONS = [
+            "ap-south-2", "ap-southeast-4", "me-central-1", "eu-south-2", "ca-west-1", "il-central-1"
+          ];
+          const nodeRegion = selectedNode.data?.region || "us-east-1";
+          const db = livePricing[nodeRegion.toLowerCase()] || ALL_INSTANCE_TYPES;
+          const isLive = !!livePricing[nodeRegion.toLowerCase()];
+          const multiplier = isLive
+            ? 1.00
+            : (REGIONAL_MULTIPLIERS[nodeRegion.toLowerCase()] !== undefined
+                ? REGIONAL_MULTIPLIERS[nodeRegion.toLowerCase()]
+                : 1.15);
+          const isLegacyUnavailable = LEGACY_UNAVAILABLE_REGIONS.includes(nodeRegion.toLowerCase());
+          
+          const filteredInstances = db.filter((inst) => {
+            const instVal = inst.value.toLowerCase();
+            const isLegacy = inst.legacy !== undefined ? inst.legacy : instVal.startsWith("t2");
+            if (isLegacyUnavailable && isLegacy) return false;
+
+            const resolvedFamily = inst.family || (
+              instVal.startsWith("t2") ? "t2" :
+              instVal.startsWith("t3") ? "t3" :
+              instVal.startsWith("t4g") ? "t4g" :
+              instVal.startsWith("m5") ? "m5" :
+              instVal.startsWith("m6g") ? "m6g" :
+              instVal.startsWith("c5") ? "c5" :
+              instVal.startsWith("c6g") ? "c6g" :
+              instVal.startsWith("r5") ? "r5" :
+              instVal.startsWith("r6g") ? "r6g" : "Other"
+            );
+            
+            const resolvedCategory = (
+              resolvedFamily.startsWith("t") || resolvedFamily.startsWith("m") ? "General Purpose" :
+              resolvedFamily.startsWith("c") ? "Compute Optimized" :
+              resolvedFamily.startsWith("r") ? "Memory Optimized" : "Other"
+            );
+
+            if (instanceActiveTab !== "All" && resolvedCategory !== instanceActiveTab) return false;
+            if (instanceSearchQuery.trim() !== "") {
+              const q = instanceSearchQuery.toLowerCase();
+              return inst.value.toLowerCase().includes(q) || resolvedFamily.toLowerCase().includes(q);
+            }
+            return true;
+          });
+
+          return (
+            <div className="fixed inset-0 bg-slate-900/50 dark:bg-zinc-950/80 backdrop-blur-md z-[70] flex items-center justify-center p-6 animate-fade-in">
+              <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-scale-up">
+                
+                {/* Header */}
+                <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-zinc-900">
+                  <div className="flex items-center gap-3">
+                    <Server size={20} className="text-sky-500" />
+                    <div>
+                      <h3 className="font-bold text-base text-slate-800 dark:text-zinc-100">
+                        Select EC2 Instance Type
+                      </h3>
+                      <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-semibold uppercase tracking-wider mt-0.5">
+                        Region: {nodeRegion} | Pricing Multiplier: {multiplier.toFixed(2)}x
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsInstanceModalOpen(false);
+                      setInstanceSearchQuery("");
+                      setInstanceActiveTab("All");
+                    }}
+                    className="text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-900 transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Search & Filter Tabs */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-zinc-900/30 border-b border-slate-100 dark:border-zinc-900">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500" size={16} />
+                    <input
+                      type="text"
+                      placeholder="Search instance type... (e.g. t3, m5)"
+                      value={instanceSearchQuery}
+                      onChange={(e) => setInstanceSearchQuery(e.target.value)}
+                      className="w-full h-10 pl-9 pr-4 bg-white dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 border border-slate-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:border-amber-500 transition-colors"
+                    />
+                  </div>
+                  {/* Category Tabs */}
+                  <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-zinc-900/60 rounded-xl border border-slate-200/50 dark:border-zinc-800/80 overflow-x-auto shrink-0">
+                    {["All", "General Purpose", "Compute Optimized", "Memory Optimized"].map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setInstanceActiveTab(tab)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
+                          instanceActiveTab === tab
+                            ? "bg-white dark:bg-zinc-800 text-amber-600 dark:text-amber-500 shadow-sm border border-slate-200/50 dark:border-zinc-700/50"
+                            : "text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        {tab}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Main List */}
+                <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-slate-50/50 dark:bg-zinc-900/10">
+                  {filteredInstances.length === 0 ? (
+                    <div className="text-center py-20 text-slate-400 dark:text-zinc-500 font-medium">
+                      No matching instance types found for region "{nodeRegion}".
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {filteredInstances.map((inst) => {
+                        const currentPlatform = selectedNode.data?.platform || "Linux";
+                        const hourlyPrice = inst.pricing[currentPlatform] !== null ? inst.pricing[currentPlatform] : inst.pricing["Linux"];
+                        const cost = parseFloat(((hourlyPrice || 0) * 730 * multiplier).toFixed(2));
+                        const isSelected = selectedNode.data?.instanceType === inst.value;
+                        
+                        const instVal = inst.value.toLowerCase();
+                        const resolvedFamily = inst.family || (
+                          instVal.startsWith("t2") ? "t2" :
+                          instVal.startsWith("t3") ? "t3" :
+                          instVal.startsWith("t4g") ? "t4g" :
+                          instVal.startsWith("m5") ? "m5" :
+                          instVal.startsWith("m6g") ? "m6g" :
+                          instVal.startsWith("c5") ? "c5" :
+                          instVal.startsWith("c6g") ? "c6g" :
+                          instVal.startsWith("r5") ? "r5" :
+                          instVal.startsWith("r6g") ? "r6g" : "Other"
+                        );
+
+                        const isFreeTier = inst.freeTier !== undefined ? inst.freeTier : (
+                          instVal === "t2.micro" || instVal === "t3.micro" || instVal === "t4g.micro"
+                        );
+                        
+                        const isCurrentGen = inst.currentGen !== undefined ? inst.currentGen : !instVal.startsWith("t2");
+                        
+                        return (
+                          <div
+                            key={inst.value}
+                            onClick={() => {
+                              updateNodeData("instanceType", inst.value);
+                              setIsInstanceModalOpen(false);
+                              setInstanceSearchQuery("");
+                              setInstanceActiveTab("All");
+                            }}
+                            className={`flex flex-col p-4 rounded-xl border transition-all cursor-pointer group gap-3 text-left ${
+                              isSelected
+                                ? "bg-amber-500/5 dark:bg-amber-500/5 border-amber-500 shadow-sm"
+                                : "bg-white dark:bg-zinc-900/40 border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/60"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg transition-colors ${
+                                  isSelected 
+                                    ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500" 
+                                    : "bg-slate-50 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 group-hover:bg-white dark:group-hover:bg-zinc-700"
+                                }`}>
+                                  <Server size={18} />
+                                </div>
+                                <div>
+                                  <h4 className="font-bold text-sm text-slate-800 dark:text-zinc-100 flex items-center gap-2">
+                                    {inst.label || inst.value}
+                                    {isSelected && (
+                                      <span className="text-[9px] bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide">
+                                        Active
+                                      </span>
+                                    )}
+                                    {isFreeTier && (
+                                      <span className="text-[9px] bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-500 px-1.5 py-0.5 rounded font-bold">
+                                        Free tier eligible
+                                      </span>
+                                    )}
+                                  </h4>
+                                  <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-semibold uppercase mt-0.5">
+                                    Family: {resolvedFamily.split(" ")[0].toLowerCase()}  •  {inst.cpu} vCPU  •  {inst.ram} Memory  •  Current generation: {isCurrentGen ? "true" : "false"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <p className="text-sm font-extrabold text-slate-900 dark:text-zinc-100">
+                                  ${cost.toFixed(2)}<span className="text-xs text-slate-400 dark:text-zinc-500 font-medium">/mo</span>
+                                </p>
+                                <p className="text-[9px] text-slate-400 dark:text-zinc-500 font-bold uppercase mt-0.5">
+                                  Est. Cost ({currentPlatform})
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* OS Hourly Rates Grid */}
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 border-t border-slate-100 dark:border-zinc-800/80 text-[10px] font-mono text-slate-500 dark:text-zinc-400/80">
+                              <div>
+                                Linux: <span className="font-bold font-sans text-slate-700 dark:text-zinc-300">${(inst.pricing.Linux * multiplier).toFixed(4)}/hr</span>
+                              </div>
+                              {inst.pricing.Windows !== null ? (
+                                <div>
+                                  Windows: <span className="font-bold font-sans text-slate-700 dark:text-zinc-300">${(inst.pricing.Windows * multiplier).toFixed(4)}/hr</span>
+                                </div>
+                              ) : (
+                                <div className="text-slate-400 dark:text-zinc-600 italic font-sans text-[9px]">
+                                  Windows not supported (ARM)
+                                </div>
+                              )}
+                              <div>
+                                RHEL: <span className="font-bold font-sans text-slate-700 dark:text-zinc-300">${(inst.pricing.RHEL * multiplier).toFixed(4)}/hr</span>
+                              </div>
+                              <div>
+                                Ubuntu Pro: <span className="font-bold font-sans text-slate-700 dark:text-zinc-300">${(inst.pricing.UbuntuPro * multiplier).toFixed(4)}/hr</span>
+                              </div>
+                              <div>
+                                SUSE: <span className="font-bold font-sans text-slate-700 dark:text-zinc-300">${(inst.pricing.SUSE * multiplier).toFixed(4)}/hr</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* DIAGNOSTICS OVERLAY */}
         {isDiagnosticsOpen && (

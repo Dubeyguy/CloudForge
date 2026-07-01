@@ -45,6 +45,7 @@ interface VisualNode {
     trustPrincipal?: string;
     instanceType?: string;
     ami?: string;
+    volumeSize?: number;
   };
 }
 
@@ -169,10 +170,15 @@ class CloudForgeStack extends TerraformStack {
       } else if (node.type === 'ec2Node') {
         const instanceType = node.data.instanceType || 't2.micro';
         const ami = node.data.ami || 'ami-0c55b159cbfafe1f0';
+        const volumeSize = node.data.volumeSize || 8;
 
         const ec2Instance = new Instance(this, safeId, {
           ami: ami,
           instanceType: instanceType,
+          rootBlockDevice: {
+            volumeSize: volumeSize,
+            volumeType: 'gp3',
+          },
           tags: { ManagedBy: 'CloudForge', Name: labelName },
         });
 
@@ -301,6 +307,169 @@ class CloudForgeStack extends TerraformStack {
     });
   }
 }
+
+const SUPPORTED_INSTANCES = new Set([
+  "t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large", "t2.xlarge", "t2.2xlarge",
+  "t3.nano", "t3.micro", "t3.small", "t3.medium", "t3.large", "t3.xlarge", "t3.2xlarge",
+  "t4g.nano", "t4g.micro", "t4g.small", "t4g.medium", "t4g.large", "t4g.xlarge", "t4g.2xlarge",
+  "m5.large", "m5.xlarge", "m5.2xlarge", "m5.4xlarge",
+  "m6g.large", "m6g.xlarge", "m6g.2xlarge", "m6g.4xlarge",
+  "c5.large", "c5.xlarge", "c5.2xlarge", "c5.4xlarge",
+  "c6g.large", "c6g.xlarge", "c6g.2xlarge", "c6g.4xlarge",
+  "r5.large", "r5.xlarge", "r5.2xlarge", "r5.4xlarge",
+  "r6g.large", "r6g.xlarge", "r6g.2xlarge", "r6g.4xlarge"
+]);
+
+const CACHE_DIR = path.join(__dirname, 'cache');
+if (!fs.existsSync(CACHE_DIR)) {
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+}
+
+import https from 'https';
+
+function fetchPricingFromURL(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      // Follow 301/302 redirects recursively
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        const redirectUrl = res.headers.location;
+        if (redirectUrl) {
+          fetchPricingFromURL(redirectUrl).then(resolve).catch(reject);
+          return;
+        }
+      }
+
+      if (res.statusCode !== 200) {
+        reject(new Error(`Failed to download instances.json: ${res.statusCode}`));
+        return;
+      }
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        resolve(data);
+      });
+    }).on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+app.get('/api/pricing/ec2', async (req, res): Promise<any> => {
+  const region = (req.query.region as string || 'us-east-1').toLowerCase();
+  const cacheFilePath = path.join(CACHE_DIR, `pricing-${region}.json`);
+
+  try {
+    // Check cache
+    if (fs.existsSync(cacheFilePath)) {
+      const stats = fs.statSync(cacheFilePath);
+      const ageHours = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60);
+      if (ageHours < 24) {
+        const cachedData = fs.readFileSync(cacheFilePath, 'utf-8');
+        return res.json(JSON.parse(cachedData));
+      }
+    }
+
+    // Cache miss or stale: fetch new data
+    const rawDataStr = await fetchPricingFromURL('https://instances.vantage.sh/instances.json');
+    const instances = JSON.parse(rawDataStr);
+    
+    const parsedPricing: any[] = [];
+
+    for (const inst of instances) {
+      const instType = inst.instance_type;
+      if (!SUPPORTED_INSTANCES.has(instType)) continue;
+
+      const pricingMap = inst.pricing || {};
+      const regionPrices = pricingMap[region] || {};
+
+      const parsePrice = (priceObj: any): number | null => {
+        if (!priceObj || !priceObj.ondemand) return null;
+        const val = parseFloat(priceObj.ondemand);
+        return isNaN(val) ? null : val;
+      };
+
+      const linux = parsePrice(regionPrices.linux);
+      const mswin = parsePrice(regionPrices.mswin);
+      const rhel = parsePrice(regionPrices.rhel);
+      const sles = parsePrice(regionPrices.sles);
+
+      const pricing = {
+        Linux: linux !== null ? linux : 0.0116,
+        Windows: mswin,
+        RHEL: rhel !== null ? rhel : (linux !== null ? parseFloat((linux + 0.06).toFixed(4)) : 0.0716),
+        UbuntuPro: linux !== null ? parseFloat((linux * 1.22).toFixed(4)) : 0.0142,
+        SUSE: sles !== null ? sles : (linux !== null ? parseFloat((linux + 0.01).toFixed(4)) : 0.0216)
+      };
+
+      parsedPricing.push({
+        value: instType,
+        cpu: inst.vCPU,
+        ram: inst.memory + " GiB",
+        pricing
+      });
+    }
+
+    if (parsedPricing.length === 0) {
+      throw new Error("Parsed empty pricing mapping.");
+    }
+
+    fs.writeFileSync(cacheFilePath, JSON.stringify(parsedPricing, null, 2), 'utf-8');
+    return res.json(parsedPricing);
+
+  } catch (err) {
+    console.error("Pricing Fetch/Cache failed, returning server fallback:", err);
+    const fallbackData = [
+      { value: "t2.nano", cpu: 1, ram: "0.5 GiB", pricing: { Linux: 0.0058, Windows: 0.0081, RHEL: 0.0658, UbuntuPro: 0.0076, SUSE: 0.0158 } },
+      { value: "t2.micro", cpu: 1, ram: "1 GiB", pricing: { Linux: 0.0116, Windows: 0.0162, RHEL: 0.0716, UbuntuPro: 0.0142, SUSE: 0.0216 } },
+      { value: "t2.small", cpu: 1, ram: "2 GiB", pricing: { Linux: 0.0230, Windows: 0.0324, RHEL: 0.0830, UbuntuPro: 0.0266, SUSE: 0.0330 } },
+      { value: "t2.medium", cpu: 2, ram: "4 GiB", pricing: { Linux: 0.0464, Windows: 0.0648, RHEL: 0.1064, UbuntuPro: 0.0531, SUSE: 0.0564 } },
+      { value: "t2.large", cpu: 2, ram: "8 GiB", pricing: { Linux: 0.0928, Windows: 0.1296, RHEL: 0.1528, UbuntuPro: 0.1062, SUSE: 0.1028 } },
+      { value: "t2.xlarge", cpu: 4, ram: "16 GiB", pricing: { Linux: 0.1856, Windows: 0.2592, RHEL: 0.2456, UbuntuPro: 0.2124, SUSE: 0.1956 } },
+      { value: "t2.2xlarge", cpu: 8, ram: "32 GiB", pricing: { Linux: 0.3712, Windows: 0.5184, RHEL: 0.4312, UbuntuPro: 0.4248, SUSE: 0.3812 } },
+      { value: "t3.nano", cpu: 1, ram: "0.5 GiB", pricing: { Linux: 0.0052, Windows: 0.0079, RHEL: 0.0652, UbuntuPro: 0.0070, SUSE: 0.0152 } },
+      { value: "t3.micro", cpu: 1, ram: "1 GiB", pricing: { Linux: 0.0104, Windows: 0.0156, RHEL: 0.0704, UbuntuPro: 0.0130, SUSE: 0.0204 } },
+      { value: "t3.small", cpu: 2, ram: "2 GiB", pricing: { Linux: 0.0208, Windows: 0.0312, RHEL: 0.0808, UbuntuPro: 0.0244, SUSE: 0.0308 } },
+      { value: "t3.medium", cpu: 2, ram: "4 GiB", pricing: { Linux: 0.0416, Windows: 0.0624, RHEL: 0.1016, UbuntuPro: 0.0488, SUSE: 0.0516 } },
+      { value: "t3.large", cpu: 2, ram: "8 GiB", pricing: { Linux: 0.0832, Windows: 0.1248, RHEL: 0.1432, UbuntuPro: 0.0976, SUSE: 0.0932 } },
+      { value: "t3.xlarge", cpu: 4, ram: "16 GiB", pricing: { Linux: 0.1664, Windows: 0.2496, RHEL: 0.2264, UbuntuPro: 0.1952, SUSE: 0.1764 } },
+      { value: "t3.2xlarge", cpu: 8, ram: "32 GiB", pricing: { Linux: 0.3328, Windows: 0.4992, RHEL: 0.3928, UbuntuPro: 0.3904, SUSE: 0.3428 } },
+      { value: "t4g.nano", cpu: 2, ram: "0.5 GiB", pricing: { Linux: 0.0042, Windows: null, RHEL: 0.0642, UbuntuPro: 0.0056, SUSE: 0.0142 } },
+      { value: "t4g.micro", cpu: 2, ram: "1 GiB", pricing: { Linux: 0.0084, Windows: null, RHEL: 0.0684, UbuntuPro: 0.0104, SUSE: 0.0184 } },
+      { value: "t4g.small", cpu: 2, ram: "2 GiB", pricing: { Linux: 0.0168, Windows: null, RHEL: 0.0768, UbuntuPro: 0.0196, SUSE: 0.0268 } },
+      { value: "t4g.medium", cpu: 2, ram: "4 GiB", pricing: { Linux: 0.0336, Windows: null, RHEL: 0.0936, UbuntuPro: 0.0392, SUSE: 0.0436 } },
+      { value: "t4g.large", cpu: 2, ram: "8 GiB", pricing: { Linux: 0.0672, Windows: null, RHEL: 0.1272, UbuntuPro: 0.0784, SUSE: 0.0772 } },
+      { value: "t4g.xlarge", cpu: 4, ram: "16 GiB", pricing: { Linux: 0.1344, Windows: null, RHEL: 0.1944, UbuntuPro: 0.1568, SUSE: 0.1444 } },
+      { value: "t4g.2xlarge", cpu: 8, ram: "32 GiB", pricing: { Linux: 0.2688, Windows: null, RHEL: 0.3288, UbuntuPro: 0.3136, SUSE: 0.2788 } },
+      { value: "m5.large", cpu: 2, ram: "8 GiB", pricing: { Linux: 0.0960, Windows: 0.1880, RHEL: 0.1560, UbuntuPro: 0.1160, SUSE: 0.2160 } },
+      { value: "m5.xlarge", cpu: 4, ram: "16 GiB", pricing: { Linux: 0.1920, Windows: 0.3760, RHEL: 0.2520, UbuntuPro: 0.2320, SUSE: 0.3120 } },
+      { value: "m5.2xlarge", cpu: 8, ram: "32 GiB", pricing: { Linux: 0.3840, Windows: 0.7520, RHEL: 0.4440, UbuntuPro: 0.4640, SUSE: 0.5040 } },
+      { value: "m5.4xlarge", cpu: 16, ram: "64 GiB", pricing: { Linux: 0.7680, Windows: 1.5040, RHEL: 0.8280, UbuntuPro: 0.9280, SUSE: 0.8880 } },
+      { value: "m6g.large", cpu: 2, ram: "8 GiB", pricing: { Linux: 0.0770, Windows: null, RHEL: 0.1370, UbuntuPro: 0.0930, SUSE: 0.1970 } },
+      { value: "m6g.xlarge", cpu: 4, ram: "16 GiB", pricing: { Linux: 0.1540, Windows: null, RHEL: 0.2140, UbuntuPro: 0.1860, SUSE: 0.2740 } },
+      { value: "m6g.2xlarge", cpu: 8, ram: "32 GiB", pricing: { Linux: 0.3080, Windows: null, RHEL: 0.3680, UbuntuPro: 0.3720, SUSE: 0.4280 } },
+      { value: "m6g.4xlarge", cpu: 16, ram: "64 GiB", pricing: { Linux: 0.6160, Windows: null, RHEL: 0.6760, UbuntuPro: 0.7440, SUSE: 0.7360 } },
+      { value: "c5.large", cpu: 2, ram: "4 GiB", pricing: { Linux: 0.0850, Windows: 0.1770, RHEL: 0.1450, UbuntuPro: 0.1050, SUSE: 0.2050 } },
+      { value: "c5.xlarge", cpu: 4, ram: "8 GiB", pricing: { Linux: 0.1700, Windows: 0.3540, RHEL: 0.2300, UbuntuPro: 0.2100, SUSE: 0.2900 } },
+      { value: "c5.2xlarge", cpu: 8, ram: "16 GiB", pricing: { Linux: 0.3400, Windows: 0.7080, RHEL: 0.4000, UbuntuPro: 0.4200, SUSE: 0.4600 } },
+      { value: "c5.4xlarge", cpu: 16, ram: "32 GiB", pricing: { Linux: 0.6800, Windows: 1.4160, RHEL: 0.7400, UbuntuPro: 0.8400, SUSE: 0.8000 } },
+      { value: "c6g.large", cpu: 2, ram: "4 GiB", pricing: { Linux: 0.0680, Windows: null, RHEL: 0.1280, UbuntuPro: 0.0840, SUSE: 0.1880 } },
+      { value: "c6g.xlarge", cpu: 4, ram: "8 GiB", pricing: { Linux: 0.1360, Windows: null, RHEL: 0.1960, UbuntuPro: 0.1680, SUSE: 0.2560 } },
+      { value: "c6g.2xlarge", cpu: 8, ram: "16 GiB", pricing: { Linux: 0.2720, Windows: null, RHEL: 0.3320, UbuntuPro: 0.3360, SUSE: 0.3920 } },
+      { value: "c6g.4xlarge", cpu: 16, ram: "32 GiB", pricing: { Linux: 0.5440, Windows: null, RHEL: 0.6040, UbuntuPro: 0.6720, SUSE: 0.6640 } },
+      { value: "r5.large", cpu: 2, ram: "16 GiB", pricing: { Linux: 0.1260, Windows: 0.2180, RHEL: 0.1860, UbuntuPro: 0.1460, SUSE: 0.2460 } },
+      { value: "r5.xlarge", cpu: 4, ram: "32 GiB", pricing: { Linux: 0.2520, Windows: 0.4360, RHEL: 0.3120, UbuntuPro: 0.2920, SUSE: 0.3720 } },
+      { value: "r5.2xlarge", cpu: 8, ram: "64 GiB", pricing: { Linux: 0.5040, Windows: 0.8720, RHEL: 0.5640, UbuntuPro: 0.5840, SUSE: 0.6240 } },
+      { value: "r5.4xlarge", cpu: 16, ram: "128 GiB", pricing: { Linux: 1.0080, Windows: 1.7440, RHEL: 1.0680, UbuntuPro: 1.1680, SUSE: 1.1280 } },
+      { value: "r6g.large", cpu: 2, ram: "16 GiB", pricing: { Linux: 0.1010, Windows: null, RHEL: 0.1610, UbuntuPro: 0.1170, SUSE: 0.2210 } },
+      { value: "r6g.xlarge", cpu: 4, ram: "32 GiB", pricing: { Linux: 0.2020, Windows: null, RHEL: 0.2620, UbuntuPro: 0.2340, SUSE: 0.3220 } },
+      { value: "r6g.2xlarge", cpu: 8, ram: "64 GiB", pricing: { Linux: 0.4040, Windows: null, RHEL: 0.4640, UbuntuPro: 0.4680, SUSE: 0.5240 } },
+      { value: "r6g.4xlarge", cpu: 16, ram: "128 GiB", pricing: { Linux: 0.8080, Windows: null, RHEL: 0.8680, UbuntuPro: 0.9360, SUSE: 0.9280 } }
+    ];
+    return res.json(fallbackData);
+  }
+});
 
 // Fixed endpoint with strict return pathways
 app.post('/api/compile', (req, res): any => {

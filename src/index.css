@@ -72,12 +72,18 @@ html, body, #root {
   background-color: #273630 !important; /* Darker than Mineral Green */
 }
 
-/* Translucent panels (Sidebar, properties) */
+/* Translucent panels (Sidebar, properties, projects list cards) */
 .forest .bg-slate-50\/90,
 .forest .bg-white\/90,
+.forest .bg-white\/80,
+.forest .bg-white\/45,
+.forest .bg-white\/40,
 .forest .dark\:bg-zinc-950\/80,
 .forest .bg-white\/95,
-.forest .dark\:bg-zinc-900\/95 {
+.forest .dark\:bg-zinc-900\/95,
+.forest .dark\:bg-zinc-900\/40,
+.forest .dark\:bg-zinc-900\/60,
+.forest .dark\:bg-zinc-900\/30 {
   background-color: rgba(39, 54, 48, 0.95) !important;
 }
 

@@ -1,0 +1,542 @@
+[
+  {
+    "value": "c5.2xlarge",
+    "cpu": 8,
+    "ram": "16 GiB",
+    "pricing": {
+      "Linux": 0.34,
+      "Windows": 0.708,
+      "RHEL": 0.455,
+      "UbuntuPro": 0.4148,
+      "SUSE": 0.44
+    }
+  },
+  {
+    "value": "c5.4xlarge",
+    "cpu": 16,
+    "ram": "32 GiB",
+    "pricing": {
+      "Linux": 0.68,
+      "Windows": 1.416,
+      "RHEL": 0.853,
+      "UbuntuPro": 0.8296,
+      "SUSE": 0.78
+    }
+  },
+  {
+    "value": "c5.large",
+    "cpu": 2,
+    "ram": "4 GiB",
+    "pricing": {
+      "Linux": 0.085,
+      "Windows": 0.177,
+      "RHEL": 0.114,
+      "UbuntuPro": 0.1037,
+      "SUSE": 0.141
+    }
+  },
+  {
+    "value": "c5.xlarge",
+    "cpu": 4,
+    "ram": "8 GiB",
+    "pricing": {
+      "Linux": 0.17,
+      "Windows": 0.354,
+      "RHEL": 0.228,
+      "UbuntuPro": 0.2074,
+      "SUSE": 0.226
+    }
+  },
+  {
+    "value": "c6g.2xlarge",
+    "cpu": 8,
+    "ram": "16 GiB",
+    "pricing": {
+      "Linux": 0.272,
+      "Windows": null,
+      "RHEL": 0.3872,
+      "UbuntuPro": 0.3318,
+      "SUSE": 0.397
+    }
+  },
+  {
+    "value": "c6g.4xlarge",
+    "cpu": 16,
+    "ram": "32 GiB",
+    "pricing": {
+      "Linux": 0.544,
+      "Windows": null,
+      "RHEL": 0.7168,
+      "UbuntuPro": 0.6637,
+      "SUSE": 0.669
+    }
+  },
+  {
+    "value": "c6g.large",
+    "cpu": 2,
+    "ram": "4 GiB",
+    "pricing": {
+      "Linux": 0.068,
+      "Windows": null,
+      "RHEL": 0.0968,
+      "UbuntuPro": 0.083,
+      "SUSE": 0.1243
+    }
+  },
+  {
+    "value": "c6g.xlarge",
+    "cpu": 4,
+    "ram": "8 GiB",
+    "pricing": {
+      "Linux": 0.136,
+      "Windows": null,
+      "RHEL": 0.1936,
+      "UbuntuPro": 0.1659,
+      "SUSE": 0.1923
+    }
+  },
+  {
+    "value": "m5.2xlarge",
+    "cpu": 8,
+    "ram": "32 GiB",
+    "pricing": {
+      "Linux": 0.384,
+      "Windows": 0.752,
+      "RHEL": 0.499,
+      "UbuntuPro": 0.4685,
+      "SUSE": 0.484
+    }
+  },
+  {
+    "value": "m5.4xlarge",
+    "cpu": 16,
+    "ram": "64 GiB",
+    "pricing": {
+      "Linux": 0.768,
+      "Windows": 1.504,
+      "RHEL": 0.941,
+      "UbuntuPro": 0.937,
+      "SUSE": 0.868
+    }
+  },
+  {
+    "value": "m5.large",
+    "cpu": 2,
+    "ram": "8 GiB",
+    "pricing": {
+      "Linux": 0.096,
+      "Windows": 0.188,
+      "RHEL": 0.125,
+      "UbuntuPro": 0.1171,
+      "SUSE": 0.152
+    }
+  },
+  {
+    "value": "m5.xlarge",
+    "cpu": 4,
+    "ram": "16 GiB",
+    "pricing": {
+      "Linux": 0.192,
+      "Windows": 0.376,
+      "RHEL": 0.25,
+      "UbuntuPro": 0.2342,
+      "SUSE": 0.248
+    }
+  },
+  {
+    "value": "m6g.2xlarge",
+    "cpu": 8,
+    "ram": "32 GiB",
+    "pricing": {
+      "Linux": 0.308,
+      "Windows": null,
+      "RHEL": 0.4232,
+      "UbuntuPro": 0.3758,
+      "SUSE": 0.433
+    }
+  },
+  {
+    "value": "m6g.4xlarge",
+    "cpu": 16,
+    "ram": "64 GiB",
+    "pricing": {
+      "Linux": 0.616,
+      "Windows": null,
+      "RHEL": 0.7888,
+      "UbuntuPro": 0.7515,
+      "SUSE": 0.741
+    }
+  },
+  {
+    "value": "m6g.large",
+    "cpu": 2,
+    "ram": "8 GiB",
+    "pricing": {
+      "Linux": 0.077,
+      "Windows": null,
+      "RHEL": 0.1058,
+      "UbuntuPro": 0.0939,
+      "SUSE": 0.1333
+    }
+  },
+  {
+    "value": "m6g.xlarge",
+    "cpu": 4,
+    "ram": "16 GiB",
+    "pricing": {
+      "Linux": 0.154,
+      "Windows": null,
+      "RHEL": 0.2116,
+      "UbuntuPro": 0.1879,
+      "SUSE": 0.2103
+    }
+  },
+  {
+    "value": "r5.2xlarge",
+    "cpu": 8,
+    "ram": "64 GiB",
+    "pricing": {
+      "Linux": 0.504,
+      "Windows": 0.872,
+      "RHEL": 0.619,
+      "UbuntuPro": 0.6149,
+      "SUSE": 0.629
+    }
+  },
+  {
+    "value": "r5.4xlarge",
+    "cpu": 16,
+    "ram": "128 GiB",
+    "pricing": {
+      "Linux": 1.008,
+      "Windows": 1.744,
+      "RHEL": 1.181,
+      "UbuntuPro": 1.2298,
+      "SUSE": 1.133
+    }
+  },
+  {
+    "value": "r5.large",
+    "cpu": 2,
+    "ram": "16 GiB",
+    "pricing": {
+      "Linux": 0.126,
+      "Windows": 0.218,
+      "RHEL": 0.155,
+      "UbuntuPro": 0.1537,
+      "SUSE": 0.182
+    }
+  },
+  {
+    "value": "r5.xlarge",
+    "cpu": 4,
+    "ram": "32 GiB",
+    "pricing": {
+      "Linux": 0.252,
+      "Windows": 0.436,
+      "RHEL": 0.31,
+      "UbuntuPro": 0.3074,
+      "SUSE": 0.308
+    }
+  },
+  {
+    "value": "r6g.2xlarge",
+    "cpu": 8,
+    "ram": "64 GiB",
+    "pricing": {
+      "Linux": 0.4032,
+      "Windows": null,
+      "RHEL": 0.5184,
+      "UbuntuPro": 0.4919,
+      "SUSE": 0.5282
+    }
+  },
+  {
+    "value": "r6g.4xlarge",
+    "cpu": 16,
+    "ram": "128 GiB",
+    "pricing": {
+      "Linux": 0.8064,
+      "Windows": null,
+      "RHEL": 0.9792,
+      "UbuntuPro": 0.9838,
+      "SUSE": 0.9314
+    }
+  },
+  {
+    "value": "r6g.large",
+    "cpu": 2,
+    "ram": "16 GiB",
+    "pricing": {
+      "Linux": 0.1008,
+      "Windows": null,
+      "RHEL": 0.1296,
+      "UbuntuPro": 0.123,
+      "SUSE": 0.1571
+    }
+  },
+  {
+    "value": "r6g.xlarge",
+    "cpu": 4,
+    "ram": "32 GiB",
+    "pricing": {
+      "Linux": 0.2016,
+      "Windows": null,
+      "RHEL": 0.2592,
+      "UbuntuPro": 0.246,
+      "SUSE": 0.2579
+    }
+  },
+  {
+    "value": "t2.2xlarge",
+    "cpu": 8,
+    "ram": "32 GiB",
+    "pricing": {
+      "Linux": 0.3712,
+      "Windows": 0.4332,
+      "RHEL": 0.4864,
+      "UbuntuPro": 0.4529,
+      "SUSE": 0.4712
+    }
+  },
+  {
+    "value": "t2.large",
+    "cpu": 2,
+    "ram": "8 GiB",
+    "pricing": {
+      "Linux": 0.0928,
+      "Windows": 0.1208,
+      "RHEL": 0.1216,
+      "UbuntuPro": 0.1132,
+      "SUSE": 0.1928
+    }
+  },
+  {
+    "value": "t2.medium",
+    "cpu": 2,
+    "ram": "4 GiB",
+    "pricing": {
+      "Linux": 0.0464,
+      "Windows": 0.0644,
+      "RHEL": 0.0752,
+      "UbuntuPro": 0.0566,
+      "SUSE": 0.1464
+    }
+  },
+  {
+    "value": "t2.micro",
+    "cpu": 1,
+    "ram": "1 GiB",
+    "pricing": {
+      "Linux": 0.0116,
+      "Windows": 0.0162,
+      "RHEL": 0.026,
+      "UbuntuPro": 0.0142,
+      "SUSE": 0.0116
+    }
+  },
+  {
+    "value": "t2.nano",
+    "cpu": 1,
+    "ram": "0.5 GiB",
+    "pricing": {
+      "Linux": 0.0058,
+      "Windows": 0.0081,
+      "RHEL": 0.0658,
+      "UbuntuPro": 0.0071,
+      "SUSE": 0.0058
+    }
+  },
+  {
+    "value": "t2.small",
+    "cpu": 1,
+    "ram": "2 GiB",
+    "pricing": {
+      "Linux": 0.023,
+      "Windows": 0.032,
+      "RHEL": 0.0376,
+      "UbuntuPro": 0.0281,
+      "SUSE": 0.053
+    }
+  },
+  {
+    "value": "t2.xlarge",
+    "cpu": 4,
+    "ram": "16 GiB",
+    "pricing": {
+      "Linux": 0.1856,
+      "Windows": 0.2266,
+      "RHEL": 0.2432,
+      "UbuntuPro": 0.2264,
+      "SUSE": 0.2856
+    }
+  },
+  {
+    "value": "t3.2xlarge",
+    "cpu": 8,
+    "ram": "32 GiB",
+    "pricing": {
+      "Linux": 0.3328,
+      "Windows": 0.48,
+      "RHEL": 0.448,
+      "UbuntuPro": 0.406,
+      "SUSE": 0.4578
+    }
+  },
+  {
+    "value": "t3.large",
+    "cpu": 2,
+    "ram": "8 GiB",
+    "pricing": {
+      "Linux": 0.0832,
+      "Windows": 0.1108,
+      "RHEL": 0.112,
+      "UbuntuPro": 0.1015,
+      "SUSE": 0.1395
+    }
+  },
+  {
+    "value": "t3.medium",
+    "cpu": 2,
+    "ram": "4 GiB",
+    "pricing": {
+      "Linux": 0.0416,
+      "Windows": 0.06,
+      "RHEL": 0.0704,
+      "UbuntuPro": 0.0508,
+      "SUSE": 0.0979
+    }
+  },
+  {
+    "value": "t3.micro",
+    "cpu": 2,
+    "ram": "1 GiB",
+    "pricing": {
+      "Linux": 0.0104,
+      "Windows": 0.0196,
+      "RHEL": 0.0392,
+      "UbuntuPro": 0.0127,
+      "SUSE": 0.0104
+    }
+  },
+  {
+    "value": "t3.nano",
+    "cpu": 2,
+    "ram": "0.5 GiB",
+    "pricing": {
+      "Linux": 0.0052,
+      "Windows": 0.0098,
+      "RHEL": 0.0652,
+      "UbuntuPro": 0.0063,
+      "SUSE": 0.0052
+    }
+  },
+  {
+    "value": "t3.small",
+    "cpu": 2,
+    "ram": "2 GiB",
+    "pricing": {
+      "Linux": 0.0208,
+      "Windows": 0.0392,
+      "RHEL": 0.0496,
+      "UbuntuPro": 0.0254,
+      "SUSE": 0.0518
+    }
+  },
+  {
+    "value": "t3.xlarge",
+    "cpu": 4,
+    "ram": "16 GiB",
+    "pricing": {
+      "Linux": 0.1664,
+      "Windows": 0.24,
+      "RHEL": 0.224,
+      "UbuntuPro": 0.203,
+      "SUSE": 0.2227
+    }
+  },
+  {
+    "value": "t4g.2xlarge",
+    "cpu": 8,
+    "ram": "32 GiB",
+    "pricing": {
+      "Linux": 0.2688,
+      "Windows": null,
+      "RHEL": 0.384,
+      "UbuntuPro": 0.3279,
+      "SUSE": 0.3938
+    }
+  },
+  {
+    "value": "t4g.large",
+    "cpu": 2,
+    "ram": "8 GiB",
+    "pricing": {
+      "Linux": 0.0672,
+      "Windows": null,
+      "RHEL": 0.096,
+      "UbuntuPro": 0.082,
+      "SUSE": 0.1235
+    }
+  },
+  {
+    "value": "t4g.medium",
+    "cpu": 2,
+    "ram": "4 GiB",
+    "pricing": {
+      "Linux": 0.0336,
+      "Windows": null,
+      "RHEL": 0.0624,
+      "UbuntuPro": 0.041,
+      "SUSE": 0.0899
+    }
+  },
+  {
+    "value": "t4g.micro",
+    "cpu": 2,
+    "ram": "1 GiB",
+    "pricing": {
+      "Linux": 0.0084,
+      "Windows": null,
+      "RHEL": 0.0372,
+      "UbuntuPro": 0.0102,
+      "SUSE": 0.0084
+    }
+  },
+  {
+    "value": "t4g.nano",
+    "cpu": 2,
+    "ram": "0.5 GiB",
+    "pricing": {
+      "Linux": 0.0042,
+      "Windows": null,
+      "RHEL": 0.0642,
+      "UbuntuPro": 0.0051,
+      "SUSE": 0.0042
+    }
+  },
+  {
+    "value": "t4g.small",
+    "cpu": 2,
+    "ram": "2 GiB",
+    "pricing": {
+      "Linux": 0.0168,
+      "Windows": null,
+      "RHEL": 0.0456,
+      "UbuntuPro": 0.0205,
+      "SUSE": 0.0481
+    }
+  },
+  {
+    "value": "t4g.xlarge",
+    "cpu": 4,
+    "ram": "16 GiB",
+    "pricing": {
+      "Linux": 0.1344,
+      "Windows": null,
+      "RHEL": 0.192,
+      "UbuntuPro": 0.164,
+      "SUSE": 0.1907
+    }
+  }
+]
