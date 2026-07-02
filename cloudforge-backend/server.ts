@@ -19,6 +19,7 @@ import { IamGroupPolicyAttachment } from './.gen/providers/aws/iam-group-policy-
 import { IamRolePolicyAttachment } from './.gen/providers/aws/iam-role-policy-attachment';
 import { Instance } from './.gen/providers/aws/instance';
 import { IamInstanceProfile } from './.gen/providers/aws/iam-instance-profile';
+import { S3Object } from './.gen/providers/aws/s3-object';
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -46,6 +47,8 @@ interface VisualNode {
     instanceType?: string;
     ami?: string;
     volumeSize?: number;
+    sourceType?: string;
+    sourcePath?: string;
   };
 }
 
@@ -150,7 +153,7 @@ class CloudForgeStack extends TerraformStack {
             const policyActionsStr = node.data.policyActions || 's3:*';
             const policyResource = node.data.policyResource || '*';
             const actions = policyActionsStr.split(',').map((act) => act.trim()).filter(Boolean);
-            
+
             const policy = new IamPolicy(this, safeId, {
               name: labelName,
               policy: JSON.stringify({
@@ -183,6 +186,106 @@ class CloudForgeStack extends TerraformStack {
         });
 
         resourceMap.set(node.id, { type: 'ec2', name: labelName, ref: ec2Instance });
+      }
+    });
+
+    // Compile S3 Objects (which require parent S3 Bucket references from resourceMap)
+    nodes.forEach((node) => {
+      if (node.type === 's3ObjectNode') {
+        const parentId = node.parentId;
+        if (!parentId) {
+          console.warn(`S3 Object ${node.id} has no parent S3 Bucket.`);
+          return;
+        }
+
+        const parentNode = resourceMap.get(parentId);
+        if (!parentNode || parentNode.type !== 's3') {
+          console.warn(`S3 Object ${node.id} parent ${parentId} is not a valid S3 Bucket resource.`);
+          return;
+        }
+
+        const bucketRef = parentNode.ref as S3Bucket;
+        const safeId = node.id.replace(/[^a-zA-Z0-9]/g, '');
+        const objectKey = node.data.label || `object-${Math.floor(Math.random() * 1000)}`;
+        const sourcePath = node.data.sourcePath || '';
+        const sourceType = node.data.sourceType || 'file';
+
+        if (sourceType === 'folder' && sourcePath) {
+          try {
+            const absoluteSourcePath = path.resolve(sourcePath);
+            if (fs.existsSync(absoluteSourcePath) && fs.statSync(absoluteSourcePath).isDirectory()) {
+              const walkFiles = (dir: string): string[] => {
+                let results: string[] = [];
+                const list = fs.readdirSync(dir);
+                list.forEach((file) => {
+                  const filePath = path.join(dir, file);
+                  const stat = fs.statSync(filePath);
+                  if (stat && stat.isDirectory()) {
+                    results = results.concat(walkFiles(filePath));
+                  } else {
+                    results.push(filePath);
+                  }
+                });
+                return results;
+              };
+
+              const files = walkFiles(absoluteSourcePath);
+              files.forEach((file, index) => {
+                const relativePath = path.relative(absoluteSourcePath, file).replace(/\\/g, '/');
+                const key = `${objectKey}/${relativePath}`;
+                const fileSafeId = `${safeId}_${index}`;
+
+                new S3Object(this, fileSafeId, {
+                  bucket: bucketRef.bucket,
+                  key: key,
+                  source: file,
+                });
+              });
+            } else {
+              new S3Object(this, safeId, {
+                bucket: bucketRef.bucket,
+                key: `${objectKey}/`,
+                content: '',
+              });
+            }
+          } catch (e) {
+            console.error(`Failed to read folder ${sourcePath} for S3 object:`, e);
+            new S3Object(this, safeId, {
+              bucket: bucketRef.bucket,
+              key: `${objectKey}/`,
+              content: '',
+            });
+          }
+        } else if (sourcePath) {
+          try {
+            const absoluteSourcePath = path.resolve(sourcePath);
+            if (fs.existsSync(absoluteSourcePath)) {
+              new S3Object(this, safeId, {
+                bucket: bucketRef.bucket,
+                key: objectKey,
+                source: absoluteSourcePath,
+              });
+            } else {
+              new S3Object(this, safeId, {
+                bucket: bucketRef.bucket,
+                key: objectKey,
+                content: 'Placeholder content',
+              });
+            }
+          } catch (e) {
+            new S3Object(this, safeId, {
+              bucket: bucketRef.bucket,
+              key: objectKey,
+              content: 'Placeholder content',
+            });
+          }
+        } else {
+          new S3Object(this, safeId, {
+            bucket: bucketRef.bucket,
+            key: objectKey,
+            content: 'Placeholder content',
+          });
+        }
       }
     });
 
@@ -247,7 +350,7 @@ class CloudForgeStack extends TerraformStack {
       if (
         (sourceNode && targetNode) &&
         ((sourceNode.iamType === 'Role' && targetNode.type === 'ec2') ||
-         (sourceNode.type === 'ec2' && targetNode.iamType === 'Role'))
+          (sourceNode.type === 'ec2' && targetNode.iamType === 'Role'))
       ) {
         const roleNode = sourceNode.iamType === 'Role' ? sourceNode : targetNode;
         const ec2Node = sourceNode.type === 'ec2' ? sourceNode : targetNode;
@@ -276,9 +379,9 @@ class CloudForgeStack extends TerraformStack {
         const childNode = resourceMap.get(node.id);
 
         if (
-          parentNode && 
-          childNode && 
-          parentNode.iamType === 'Group' && 
+          parentNode &&
+          childNode &&
+          parentNode.iamType === 'Group' &&
           childNode.iamType === 'User'
         ) {
           const userRef = childNode.ref as IamUser;
@@ -288,7 +391,7 @@ class CloudForgeStack extends TerraformStack {
           if (!userGroups.has(userNodeId)) {
             userGroups.set(userNodeId, { userRef, userLabel: childNode.name, groupNames: [] });
           }
-          
+
           const groups = userGroups.get(userNodeId)!.groupNames;
           if (!groups.includes(groupName)) {
             groups.push(groupName);
@@ -374,7 +477,7 @@ app.get('/api/pricing/ec2', async (req, res): Promise<any> => {
     // Cache miss or stale: fetch new data
     const rawDataStr = await fetchPricingFromURL('https://instances.vantage.sh/instances.json');
     const instances = JSON.parse(rawDataStr);
-    
+
     const parsedPricing: any[] = [];
 
     for (const inst of instances) {
@@ -485,7 +588,7 @@ app.post('/api/compile', (req, res): any => {
     cdktfApp.synth();
 
     const generatedFilePath = path.join(__dirname, 'cdktf.out', 'stacks', 'cloudforge-export', 'cdk.tf.json');
-    
+
     if (fs.existsSync(generatedFilePath)) {
       const generatedCode = fs.readFileSync(generatedFilePath, 'utf-8');
       return res.json({
@@ -604,7 +707,7 @@ app.post('/api/projects', (req, res): any => {
     if (existingPath) {
       try {
         fs.unlinkSync(existingPath);
-      } catch (e) {}
+      } catch (e) { }
     }
     const safeName = sanitizeFilename(project.name);
     const filePath = path.join(dir, `${safeName}-${project.id}.json`);
@@ -662,6 +765,100 @@ app.delete('/api/projects/:id', (req, res): any => {
     }
   } catch (err) {
     res.status(500).json({ error: "Failed to delete project file", details: String(err) });
+  }
+});
+
+// 7. GET browse filesystem
+app.get('/api/fs/browse', (req, res): any => {
+  const queryPath = req.query.path as string;
+  let targetPath = queryPath || os.homedir();
+
+  try {
+    targetPath = path.resolve(targetPath);
+    if (!fs.existsSync(targetPath)) {
+      return res.status(400).json({ error: "Path does not exist" });
+    }
+
+    const stats = fs.statSync(targetPath);
+    if (!stats.isDirectory()) {
+      return res.status(400).json({ error: "Path is not a directory" });
+    }
+
+    const entries = fs.readdirSync(targetPath, { withFileTypes: true });
+
+    const folders = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({
+        name: entry.name,
+        path: path.join(targetPath, entry.name),
+        isDir: true,
+      }));
+
+    const files = entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => ({
+        name: entry.name,
+        path: path.join(targetPath, entry.name),
+        isDir: false,
+      }));
+
+    res.json({
+      currentPath: targetPath,
+      parentPath: path.dirname(targetPath),
+      folders,
+      files,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to read directory", details: String(err) });
+  }
+});
+
+function getDirSize(dirPath: string): number {
+  let size = 0;
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      try {
+        if (entry.isDirectory()) {
+          size += getDirSize(fullPath);
+        } else if (entry.isFile()) {
+          const stats = fs.statSync(fullPath);
+          size += stats.size;
+        }
+      } catch (e) {
+        // ignore inaccessible files
+      }
+    }
+  } catch (err) {
+    // ignore failures
+  }
+  return size;
+}
+
+app.get('/api/fs/size', (req, res): any => {
+  const targetPath = req.query.path as string;
+  if (!targetPath) {
+    return res.status(400).json({ error: "Path query parameter is required" });
+  }
+
+  try {
+    const resolvedPath = path.resolve(targetPath);
+    if (!fs.existsSync(resolvedPath)) {
+      return res.status(404).json({ error: "Path does not exist" });
+    }
+
+    const stats = fs.statSync(resolvedPath);
+    let sizeBytes = 0;
+    if (stats.isDirectory()) {
+      sizeBytes = getDirSize(resolvedPath);
+    } else {
+      sizeBytes = stats.size;
+    }
+
+    res.json({ path: resolvedPath, sizeBytes });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to calculate path size", details: String(err) });
   }
 });
 

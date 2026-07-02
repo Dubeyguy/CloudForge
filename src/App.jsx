@@ -12,6 +12,7 @@ import {
   Position,
   ConnectionMode,
   reconnectEdge, // <-- Added for Edge Reconnection
+  useStore,
 } from "@xyflow/react";
 import {
   Play,
@@ -58,6 +59,8 @@ import {
   Coins,
   Maximize2,
   Edit,
+  File,
+  Folder,
   Upload,
   Server,
 } from "lucide-react";
@@ -501,112 +504,235 @@ const AuditBadge = ({ data }) => {
   );
 };
 
-const S3Node = ({ data }) => {
+const ZoomedOutOverlay = ({ type, name, colorClass = "bg-amber-500", borderClass = "border-amber-500", isCard = false, circle = false }) => {
+  const zoom = useStore((s) => s.transform[2]);
+  const isZoomedOut = zoom < 0.65;
+
+  if (!isZoomedOut) return null;
+
+  if (isCard) {
+    return (
+      <div
+        className={`absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-zinc-950 border border-dashed ${borderClass} z-50 pointer-events-none select-none text-center rounded-xl p-2.5 animate-fade-in`}
+      >
+        <span className={`text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded text-white ${colorClass} mb-1.5 shrink-0 shadow-sm`}>
+          {type}
+        </span>
+        <span className="text-slate-900 dark:text-zinc-100 font-extrabold text-[15px] leading-tight truncate w-full px-1.5 shrink-0">
+          {name}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-zinc-950 border-4 border-dashed ${borderClass} z-50 pointer-events-none select-none text-center p-5 transition-all duration-300 ${
+        circle ? "rounded-full" : "rounded-3xl"
+      }`}
+    >
+      <span className={`text-[18px] font-black uppercase tracking-widest px-4 py-1.5 rounded text-white ${colorClass} mb-3 shadow-lg shrink-0`}>
+        {type}
+      </span>
+      <span className="text-slate-900 dark:text-zinc-100 font-black text-[26px] tracking-wide leading-tight line-clamp-3 max-w-full px-3 shrink-0">
+        {name}
+      </span>
+    </div>
+  );
+};
+
+const S3Node = ({ id, data, selected }) => {
   const activeMode = React.useContext(ModeContext);
   const isBudgetMode = activeMode === "budgets";
   const isAuditMode = activeMode === "audit";
   const cost = data?.cost || 0;
   const findings = data?.auditFindings || [];
 
-  // Heatmap color logic
-  let glowClass = "hover:border-amber-400 dark:hover:border-amber-500/50";
-  let borderClass = "border-slate-200 dark:border-zinc-800";
-  let badgeClass = "bg-slate-50 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border border-slate-100 dark:border-zinc-700/50";
+  const [isListOpen, setIsListOpen] = useState(false);
+  const children = useStore((s) => s.nodes.filter((n) => n.parentId === id && n.type === "s3ObjectNode"));
+  const { setNodes, setEdges } = useReactFlow();
 
+  const handleDeleteChild = (childId) => {
+    setNodes((nds) => nds.filter((n) => n.id !== childId));
+    setEdges((eds) => eds.filter((e) => e.source !== childId && e.target !== childId));
+  };
+
+  let borderClass = "border-dashed border-amber-300 dark:border-amber-500/50 hover:border-amber-400 dark:hover:border-amber-500/80";
   if (isBudgetMode) {
-    if (cost === 0) {
-      glowClass = "shadow-[0_0_15px_rgba(148,163,184,0.15)] border-slate-300 dark:border-zinc-700";
-      borderClass = "border-slate-300 dark:border-zinc-700";
-      badgeClass = "bg-slate-500/10 text-slate-500 border border-slate-500/20";
-    } else if (cost < 5) {
-      glowClass = "shadow-[0_0_15px_rgba(16,185,129,0.3)] border-emerald-400 dark:border-emerald-500/50";
-      borderClass = "border-emerald-400 dark:border-emerald-500/50";
-      badgeClass = "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20";
-    } else if (cost < 20) {
-      glowClass = "shadow-[0_0_15px_rgba(234,179,8,0.3)] border-yellow-400 dark:border-yellow-500/50";
-      borderClass = "border-yellow-400 dark:border-yellow-500/50";
-      badgeClass = "bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 border border-yellow-100 dark:border-yellow-500/20";
-    } else if (cost < 100) {
-      glowClass = "shadow-[0_0_15px_rgba(249,115,22,0.3)] border-orange-400 dark:border-orange-500/50";
-      borderClass = "border-orange-400 dark:border-orange-500/50";
-      badgeClass = "bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-500 border border-orange-100 dark:border-orange-500/20";
-    } else {
-      glowClass = "shadow-[0_0_20px_rgba(239,68,68,0.5)] border-rose-500 animate-pulse";
-      borderClass = "border-rose-500";
-      badgeClass = "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20";
-    }
-  } else if (isAuditMode) {
-    if (findings.length === 0) {
-      glowClass = "shadow-[0_0_15px_rgba(16,185,129,0.15)] border-emerald-400 dark:border-emerald-500/30 hover:border-emerald-500";
-      borderClass = "border-emerald-400 dark:border-emerald-500/30";
-    } else {
-      const hasCritical = findings.some((f) => f.severity === "critical" || f.severity === "high");
-      if (hasCritical) {
-        glowClass = "shadow-[0_0_20px_rgba(239,68,68,0.3)] border-rose-500 hover:border-rose-600";
-        borderClass = "border-rose-500";
-      } else {
-        glowClass = "shadow-[0_0_15px_rgba(245,158,11,0.25)] border-amber-500 hover:border-amber-600";
-        borderClass = "border-amber-500";
-      }
-    }
+    borderClass = "border-dashed border-amber-400 dark:border-amber-500/50";
   }
 
   return (
-    <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
-      <AuditBadge data={data} />
+    <>
+      <NodeResizer
+        color="#f59e0b"
+        isVisible={selected}
+        minWidth={250}
+        minHeight={150}
+      />
+      <div
+        className={`w-full h-full relative border-4 bg-transparent transition-colors cursor-grab active:cursor-grabbing group rounded-3xl ${borderClass}`}
+      >
+        <ZoomedOutOverlay type="S3 Bucket" name={data?.label} colorClass="bg-amber-500" borderClass="border-amber-500" />
+        <Handle
+          type="source"
+          position={Position.Top}
+          id="top"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-amber-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="right"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-amber-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="bottom"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-amber-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+        <Handle
+          type="source"
+          position={Position.Left}
+          id="left"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-amber-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+
+        <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none select-none z-10 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 pointer-events-auto">
+            <div className="p-1.5 bg-amber-100 dark:bg-amber-500/20 rounded-md text-amber-600 dark:text-amber-500 shrink-0">
+              <Database size={14} />
+            </div>
+            <span className="text-amber-700 dark:text-amber-300 font-bold text-xs uppercase tracking-widest truncate">
+              {data?.label || "S3 Bucket"}
+            </span>
+            {children.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsListOpen(!isListOpen);
+                }}
+                className={`p-1 rounded text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all ${
+                  isListOpen ? "bg-amber-100 dark:bg-amber-500/30" : ""
+                }`}
+                title="Toggle Snap List"
+              >
+                <Layers size={11} />
+              </button>
+            )}
+          </div>
+          <span className="text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-500/20">
+            {data?.isPublic ? "Public" : "Private"}
+          </span>
+        </div>
+
+        {isListOpen && children.length > 0 && (
+          <div className="absolute top-12 left-4 right-4 bottom-4 bg-white/95 dark:bg-zinc-950/95 backdrop-blur p-3 rounded-2xl border border-slate-200/60 dark:border-zinc-800/80 overflow-y-auto custom-scrollbar pointer-events-auto cursor-default flex flex-col gap-1.5 z-20 shadow-lg animate-fade-in nodrag">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-900 pb-1.5 mb-1 shrink-0">
+              <span className="text-[9px] uppercase font-bold tracking-widest text-slate-400 dark:text-zinc-500">
+                Snapped Objects ({children.length})
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsListOpen(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 transition-colors"
+              >
+                <X size={10} />
+              </button>
+            </div>
+            {children.map((child) => (
+              <div key={child.id} className="flex items-center justify-between gap-2 text-[10px] bg-slate-50 dark:bg-zinc-900/40 p-2 rounded-xl border border-slate-100 dark:border-zinc-900/60 hover:border-amber-400/50 dark:hover:border-amber-500/30 transition-colors">
+                <div className="flex flex-col min-w-0 flex-1 pr-1">
+                  <span className="font-bold text-slate-700 dark:text-zinc-200 truncate">
+                    {child.data?.label || "S3 Object"}
+                  </span>
+                  <span className="text-[8px] text-slate-400 dark:text-zinc-500 font-mono truncate" title={child.data?.sourcePath || ""}>
+                    Path: {child.data?.sourcePath || "No path selected"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteChild(child.id);
+                  }}
+                  className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded transition-colors shrink-0"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
+
+const S3ObjectNode = ({ data, id }) => {
+  const parentId = useStore((s) => s.nodes.find((n) => n.id === id)?.parentId);
+  const zoom = useStore((s) => s.transform[2]);
+  const isZoomedOut = zoom < 0.65;
+
+  if (isZoomedOut && parentId) return null;
+
+  const isFolder = data?.sourceType === "folder";
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all cursor-grab active:cursor-grabbing group relative hover:border-amber-400 dark:hover:border-amber-500/50">
+      <ZoomedOutOverlay type="S3 Object" name={data?.label} colorClass="bg-amber-500" borderClass="border-amber-500" isCard={true} />
       <Handle
-        type="source"
+        type="target"
         position={Position.Top}
         id="top"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-amber-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="right"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-amber-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-amber-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
       <Handle
         type="source"
         position={Position.Bottom}
         id="bottom"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-amber-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
-      <Handle
-        type="source"
-        position={Position.Left}
-        id="left"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-amber-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
-
-      <div className="flex items-center justify-between gap-2 min-w-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg text-amber-600 dark:text-amber-500 border border-amber-100 dark:border-amber-500/20 shadow-inner shrink-0">
-            <HardDrive size={16} />
-          </div>
-          <div className="flex flex-col min-w-0">
-            <h4 className="text-slate-800 dark:text-zinc-100 font-bold text-sm leading-tight tracking-wide truncate">
-              {data?.label || "S3 Bucket"}
-            </h4>
-            <p className="text-slate-400 dark:text-zinc-500 text-[10px] uppercase tracking-widest mt-0.5 font-semibold truncate">
-              Amazon S3
-            </p>
-          </div>
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-amber-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg text-amber-600 dark:text-amber-500 border border-amber-100 dark:border-amber-500/20 shadow-inner shrink-0">
+          {isFolder ? <Folder size={16} /> : <File size={16} />}
         </div>
-        <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded-md shadow-sm transition-colors ${isBudgetMode ? badgeClass : (isAuditMode ? (data?.isPublic ? "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20" : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20") : (
-          data?.isPublic
-            ? "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20"
-            : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20"
-        ))
-          }`}>
-          {isBudgetMode ? `$${cost.toFixed(2)}/mo` : (data?.isPublic ? "Public" : "Private")}
-        </span>
+        <div className="flex flex-col min-w-0">
+          <h4 className="text-slate-800 dark:text-zinc-100 font-bold text-sm leading-tight tracking-wide truncate">
+            {data?.label || "S3 Object"}
+          </h4>
+          <p className="text-slate-400 dark:text-zinc-500 text-[10px] uppercase tracking-widest mt-0.5 font-semibold truncate">
+            {isFolder ? "Folder Source" : "File Source"}
+          </p>
+        </div>
       </div>
     </div>
   );
 };
 
-const IAMNode = ({ data }) => {
+const IAMNode = ({ data, id }) => {
+  const parentId = useStore((s) => s.nodes.find((n) => n.id === id)?.parentId);
+  const zoom = useStore((s) => s.transform[2]);
+  const isZoomedOut = zoom < 0.65;
+
+  if (isZoomedOut && parentId) return null;
+
   const activeMode = React.useContext(ModeContext);
   const isBudgetMode = activeMode === "budgets";
   const isAuditMode = activeMode === "audit";
@@ -650,31 +776,40 @@ const IAMNode = ({ data }) => {
 
   return (
     <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
+      <ZoomedOutOverlay type={`IAM ${data?.iamType || "Resource"}`} name={data?.label} colorClass="bg-violet-500" borderClass="border-violet-500" isCard={true} />
       <AuditBadge data={data} />
       <Handle
         type="source"
         position={Position.Top}
         id="top"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-violet-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
       <Handle
         type="source"
         position={Position.Right}
         id="right"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-violet-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
       <Handle
         type="source"
         position={Position.Bottom}
         id="bottom"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-violet-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
       <Handle
         type="source"
         position={Position.Left}
         id="left"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-violet-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
 
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -707,30 +842,39 @@ const ShapeNode = ({ data, selected }) => {
   if (isText) {
     return (
       <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-4 shadow-lg dark:shadow-xl flex items-center justify-center min-w-[120px] min-h-[80px] transition-all hover:border-blue-400 dark:hover:border-blue-500/50 cursor-grab active:cursor-grabbing rounded-xl group relative">
+        <ZoomedOutOverlay type="Note" name={data?.label} colorClass="bg-blue-500" borderClass="border-blue-500" isCard={true} />
         <Handle
           type="source"
           position={Position.Top}
           id="top"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
         <Handle
           type="source"
           position={Position.Right}
           id="right"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
         <Handle
           type="source"
           position={Position.Bottom}
           id="bottom"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
         <Handle
           type="source"
           position={Position.Left}
           id="left"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
         <span className="text-slate-800 dark:text-zinc-200 font-bold text-sm text-center">
           {data?.label || "Text Note"}
         </span>
@@ -750,30 +894,39 @@ const ShapeNode = ({ data, selected }) => {
       <div
         className={`w-full h-full relative border-4 border-dashed border-slate-300 dark:border-zinc-700 bg-slate-500/5 dark:bg-zinc-500/5 transition-colors hover:border-blue-400 dark:hover:border-blue-500/80 cursor-grab active:cursor-grabbing group ${isCircle ? "rounded-full" : "rounded-3xl"}`}
       >
+        <ZoomedOutOverlay type={data?.shapeType || "Group"} name={data?.label} colorClass="bg-blue-500" borderClass="border-blue-500" circle={isCircle} />
         <Handle
           type="source"
           position={Position.Top}
           id="top"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
         <Handle
           type="source"
           position={Position.Right}
           id="right"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
         <Handle
           type="source"
           position={Position.Bottom}
           id="bottom"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
         <Handle
           type="source"
           position={Position.Left}
           id="left"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-blue-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
 
         <div
           className={`absolute inset-4 nodrag cursor-default ${isCircle ? "rounded-full" : "rounded-2xl"}`}
@@ -788,7 +941,16 @@ const ShapeNode = ({ data, selected }) => {
   );
 };
 
-const IAMGroupNode = ({ data, selected }) => {
+const IAMGroupNode = ({ id, data, selected }) => {
+  const [isListOpen, setIsListOpen] = useState(false);
+  const children = useStore((s) => s.nodes.filter((n) => n.parentId === id && n.type === "iamNode"));
+  const { setNodes, setEdges } = useReactFlow();
+
+  const handleDeleteChild = (childId) => {
+    setNodes((nds) => nds.filter((n) => n.id !== childId));
+    setEdges((eds) => eds.filter((e) => e.source !== childId && e.target !== childId));
+  };
+
   return (
     <>
       <NodeResizer
@@ -800,39 +962,107 @@ const IAMGroupNode = ({ data, selected }) => {
       <div
         className={`w-full h-full relative border-4 border-dashed border-violet-300 dark:border-violet-500/50 bg-transparent transition-colors hover:border-violet-400 dark:hover:border-violet-500/80 cursor-grab active:cursor-grabbing group rounded-3xl`}
       >
+        <ZoomedOutOverlay type="IAM Group" name={data?.label} colorClass="bg-violet-500" borderClass="border-violet-500" />
         <Handle
           type="source"
           position={Position.Top}
           id="top"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-violet-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
         <Handle
           type="source"
           position={Position.Right}
           id="right"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-violet-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
         <Handle
           type="source"
           position={Position.Bottom}
           id="bottom"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-violet-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
         <Handle
           type="source"
           position={Position.Left}
           id="left"
-          className="opacity-0 group-hover:opacity-100 transition-opacity !bg-violet-500 w-4 h-4 border-2 !border-white dark:!border-zinc-900"
-        />
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-violet-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
 
-        <div className="absolute top-4 left-4 right-4 flex items-center gap-2 pointer-events-none select-none z-10 min-w-0">
-          <div className="p-1.5 bg-violet-100 dark:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 shrink-0">
-            <Users size={14} />
+        <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none select-none z-10 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 pointer-events-auto">
+            <div className="p-1.5 bg-violet-100 dark:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 shrink-0">
+              <Users size={14} />
+            </div>
+            <span className="text-violet-700 dark:text-violet-300 font-bold text-xs uppercase tracking-widest truncate">
+              {data?.label || "IAM Group"}
+            </span>
+            {children.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsListOpen(!isListOpen);
+                }}
+                className={`p-1 rounded text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/20 transition-all ${
+                  isListOpen ? "bg-violet-100 dark:bg-violet-500/30" : ""
+                }`}
+                title="Toggle Group Members List"
+              >
+                <Layers size={11} />
+              </button>
+            )}
           </div>
-          <span className="text-violet-700 dark:text-violet-300 font-bold text-xs uppercase tracking-widest truncate">
-            {data?.label || "IAM Group"}
-          </span>
         </div>
+
+        {isListOpen && children.length > 0 && (
+          <div className="absolute top-12 left-4 right-4 bottom-4 bg-white/95 dark:bg-zinc-955/95 backdrop-blur p-3 rounded-2xl border border-slate-200/60 dark:border-zinc-800/80 overflow-y-auto custom-scrollbar pointer-events-auto cursor-default flex flex-col gap-1.5 z-20 shadow-lg animate-fade-in nodrag">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-900 pb-1.5 mb-1 shrink-0">
+              <span className="text-[9px] uppercase font-bold tracking-widest text-slate-400 dark:text-zinc-500">
+                Group Members ({children.length})
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsListOpen(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 transition-colors"
+              >
+                <X size={10} />
+              </button>
+            </div>
+            {children.map((child) => (
+              <div key={child.id} className="flex items-center justify-between gap-2 text-[10px] bg-slate-50 dark:bg-zinc-900/40 p-2 rounded-xl border border-slate-100 dark:border-zinc-900/60 hover:border-violet-400/50 dark:hover:border-violet-500/30 transition-colors">
+                <div className="flex flex-col min-w-0 flex-1 pr-1">
+                  <span className="font-bold text-slate-700 dark:text-zinc-200 truncate">
+                    {child.data?.label || "IAM User"}
+                  </span>
+                  <span className="text-[8px] text-slate-400 dark:text-zinc-500 font-mono truncate">
+                    Type: {child.data?.iamType || "User"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteChild(child.id);
+                  }}
+                  className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded transition-colors shrink-0"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );
@@ -881,31 +1111,40 @@ const EC2Node = ({ data }) => {
 
   return (
     <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
+      <ZoomedOutOverlay type="EC2 Instance" name={data?.label} colorClass="bg-sky-500" borderClass="border-sky-500" isCard={true} />
       <AuditBadge data={data} />
       <Handle
         type="source"
         position={Position.Top}
         id="top"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-sky-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-sky-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
       <Handle
         type="source"
         position={Position.Right}
         id="right"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-sky-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-sky-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
       <Handle
         type="source"
         position={Position.Bottom}
         id="bottom"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-sky-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-sky-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
       <Handle
         type="source"
         position={Position.Left}
         id="left"
-        className="opacity-0 group-hover:opacity-100 transition-opacity !bg-sky-500 w-3 h-3 border-2 !border-white dark:!border-zinc-900"
-      />
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-sky-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
 
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -929,7 +1168,7 @@ const EC2Node = ({ data }) => {
   );
 };
 
-const nodeTypes = { s3Node: S3Node, shapeNode: ShapeNode, iamNode: IAMNode, iamGroupNode: IAMGroupNode, ec2Node: EC2Node };
+const nodeTypes = { s3Node: S3Node, s3ObjectNode: S3ObjectNode, shapeNode: ShapeNode, iamNode: IAMNode, iamGroupNode: IAMGroupNode, ec2Node: EC2Node };
 
 const defaultInitialNodes = [
   {
@@ -944,7 +1183,8 @@ const defaultInitialNodes = [
       cost: 0.23,
     },
     position: { x: 250, y: 150 },
-    zIndex: 0,
+    zIndex: -1,
+    style: { width: 300, height: 200 },
   },
 ];
 
@@ -1301,6 +1541,36 @@ function CloudForgeEditor({
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
+  // Filesystem directory browser states
+  const [isFsModalOpen, setIsFsModalOpen] = useState(false);
+  const [fsCurrentPath, setFsCurrentPath] = useState("");
+  const [fsParentPath, setFsParentPath] = useState("");
+  const [fsFolders, setFsFolders] = useState([]);
+  const [fsFiles, setFsFiles] = useState([]);
+  const [fsSelectedItem, setFsSelectedItem] = useState(null);
+  const [fsOnSelect, setFsOnSelect] = useState(() => () => {});
+
+  const openFsBrowser = async (initialPath, onSelectCallback) => {
+    setFsSelectedItem(null);
+    setFsOnSelect(() => onSelectCallback);
+    setIsFsModalOpen(true);
+    await fetchFsDirectory(initialPath || "");
+  };
+
+  const fetchFsDirectory = async (dirPath) => {
+    try {
+      const res = await fetch(`http://localhost:3001/api/fs/browse?path=${encodeURIComponent(dirPath)}`);
+      if (!res.ok) throw new Error("Failed to read directory");
+      const data = await res.json();
+      setFsCurrentPath(data.currentPath);
+      setFsParentPath(data.parentPath);
+      setFsFolders(data.folders);
+      setFsFiles(data.files);
+    } catch (err) {
+      addLog(`❌ File browser error: ${err.message}`, "error");
+    }
+  };
+
   const [expandedCategories, setExpandedCategories] = useState({
     aws: true,
     iam: true,
@@ -1375,6 +1645,52 @@ function CloudForgeEditor({
     }, 1000);
     return () => clearTimeout(timer);
   }, [nodes, edges, activeProject.id, onSave, userSettings.autoSave]);
+
+  // Auto-recalculate S3 Bucket size and cost based on nested S3 Objects
+  useEffect(() => {
+    let changed = false;
+    const updated = nodes.map((node) => {
+      if (node.type === "s3Node") {
+        const children = nodes.filter((c) => c.type === "s3ObjectNode" && c.parentId === node.id);
+        const childrenWithPaths = children.filter((c) => c.data?.sourcePath);
+        
+        if (childrenWithPaths.length > 0) {
+          const totalSizeGB = childrenWithPaths.reduce((sum, child) => sum + (child.data?.sizeGB || 0), 0);
+          const storageGB = parseFloat(totalSizeGB.toFixed(3));
+          const cost = parseFloat((storageGB * 0.023).toFixed(2));
+          if (node.data?.storageGB !== storageGB || node.data?.cost !== cost || !node.data?.isAutoSized) {
+            changed = true;
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                storageGB,
+                cost,
+                isAutoSized: true,
+              },
+            };
+          }
+        } else if (node.data?.isAutoSized) {
+          // If no nested S3 Objects have paths, switch back to manual sizing mode
+          changed = true;
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              storageGB: 10,
+              cost: 0.23,
+              isAutoSized: false,
+            },
+          };
+        }
+      }
+      return node;
+    });
+
+    if (changed) {
+      setNodes(updated);
+    }
+  }, [nodes, setNodes]);
 
   useEffect(() => {
     if (activeMode === "budgets") {
@@ -1496,10 +1812,10 @@ function CloudForgeEditor({
 
     // Center offset adjustments based on node size
     let centeredPosition = { x: flowX, y: flowY };
-    if (nodeType === "s3Node" || nodeType === "ec2Node" || (nodeType === "iamNode" && labelType !== "Group")) {
+    if (nodeType === "s3ObjectNode" || nodeType === "ec2Node" || (nodeType === "iamNode" && labelType !== "Group")) {
       centeredPosition.x -= 110;
       centeredPosition.y -= 35;
-    } else if (nodeType === "iamGroupNode" || labelType === "Group") {
+    } else if (nodeType === "iamGroupNode" || nodeType === "s3Node" || labelType === "Group") {
       centeredPosition.x -= 150;
       centeredPosition.y -= 100;
     } else if (nodeType === "shapeNode") {
@@ -1530,9 +1846,25 @@ function CloudForgeEditor({
           cost: 0.23,
         },
         position: centeredPosition,
-        zIndex: 0,
+        zIndex: -1,
+        style: { width: 300, height: 200 },
       };
       addLog(`➕ Added S3 Bucket and Connected.`, "success");
+    } else if (nodeType === "s3ObjectNode") {
+      newNodeId = `s3_obj_${Date.now()}`;
+      newNode = {
+        id: newNodeId,
+        type: "s3ObjectNode",
+        data: {
+          label: `new-object-${Math.floor(Math.random() * 1000)}`,
+          sourceType: "file",
+          sourcePath: "",
+          region: userSettings.defaultRegion,
+        },
+        position: centeredPosition,
+        zIndex: 0,
+      };
+      addLog(`➕ Added S3 Object and Connected.`, "success");
     } else if (nodeType === "ec2Node") {
       newNodeId = `ec2_${Date.now()}`;
       newNode = {
@@ -1804,6 +2136,70 @@ function CloudForgeEditor({
           addLog(`User grouped into IAM Group`, "success");
         }
       }
+
+      // Handle dropping into S3 Bucket (s3Node)
+      if (node.type === "s3ObjectNode") {
+        const intersections = getIntersectingNodes(node).filter(
+          (n) => n.type === "s3Node"
+        );
+
+        if (intersections.length > 0 && !node.parentId) {
+          const groupNode = intersections[0];
+
+          setNodes((nds) => {
+            const currentChildren = nds.filter(
+              (n) => n.parentId === groupNode.id
+            );
+
+            const newChildrenCount = currentChildren.length + 1;
+            const minHeight = 100 + Math.ceil(newChildrenCount / 2) * 80;
+            const minWidth = newChildrenCount > 1 ? 500 : 280;
+
+            const updatedNodes = nds.map((n) => {
+              if (n.id === groupNode.id) {
+                const currentHeight = n.style?.height || 200;
+                const currentWidth = n.style?.width || 250;
+                return {
+                  ...n,
+                  style: {
+                    ...n.style,
+                    height: Math.max(currentHeight, minHeight),
+                    width: Math.max(currentWidth, minWidth),
+                  },
+                };
+              }
+
+              if (n.parentId === groupNode.id) {
+                const childIndex = currentChildren.findIndex(child => child.id === n.id);
+                const row = Math.floor(childIndex / 2);
+                const col = childIndex % 2;
+                return {
+                  ...n,
+                  position: { x: 20 + col * 240, y: 60 + row * 80 },
+                };
+              }
+
+              if (n.id === node.id) {
+                const childIndex = currentChildren.length;
+                const row = Math.floor(childIndex / 2);
+                const col = childIndex % 2;
+                return {
+                  ...n,
+                  parentId: groupNode.id,
+                  position: { x: 20 + col * 240, y: 60 + row * 80 },
+                };
+              }
+
+              return n;
+            });
+
+            const targetNode = updatedNodes.find((n) => n.id === node.id);
+            const withoutTarget = updatedNodes.filter((n) => n.id !== node.id);
+            return [...withoutTarget, targetNode];
+          });
+          addLog(`S3 Object grouped into S3 Bucket`, "success");
+        }
+      }
     },
     [getIntersectingNodes, getNode, setNodes, addLog]
   );
@@ -2016,10 +2412,10 @@ function CloudForgeEditor({
   const spawnNode = useCallback((nodeType, labelType, position) => {
     takeSnapshot();
     const getNodeDimensions = (type, label) => {
-      if (type === "s3Node" || type === "ec2Node" || type === "iamNode") {
+      if (type === "s3ObjectNode" || type === "ec2Node" || type === "iamNode") {
         return { w: 220, h: 70 };
       }
-      if (type === "iamGroupNode" || label === "Group") {
+      if (type === "iamGroupNode" || type === "s3Node" || label === "Group") {
         return { w: 300, h: 200 };
       }
       if (type === "shapeNode") {
@@ -2114,9 +2510,107 @@ function CloudForgeEditor({
           cost: 0.23,
         },
         position: resolvedPosition,
-        zIndex: 0,
+        zIndex: -1,
+        style: { width: 300, height: 200 },
       };
       addLog(`➕ Added S3 Bucket.`, "info");
+    } else if (nodeType === "s3ObjectNode") {
+      let parentGroupId = null;
+      if (position) {
+        const groupNode = nodes.find((n) => {
+          if (n.type !== "s3Node") return false;
+          const gx = n.position.x;
+          const gy = n.position.y;
+          const gw = n.style?.width || 300;
+          const gh = n.style?.height || 200;
+
+          const cx = resolvedPosition.x + 110;
+          const cy = resolvedPosition.y + 35;
+          return cx >= gx && cx <= gx + gw && cy >= gy && cy <= gy + gh;
+        });
+
+        if (groupNode) {
+          parentGroupId = groupNode.id;
+        }
+      }
+
+      if (parentGroupId) {
+        const objId = `s3_obj_${Date.now()}`;
+        setNodes((nds) => {
+          const currentChildren = nds.filter((n) => n.parentId === parentGroupId);
+          const newChildrenCount = currentChildren.length + 1;
+          const minHeight = 100 + Math.ceil(newChildrenCount / 2) * 80;
+          const minWidth = newChildrenCount > 1 ? 500 : 280;
+
+          const childIndex = currentChildren.length;
+          const row = Math.floor(childIndex / 2);
+          const col = childIndex % 2;
+
+          const nodeData = {
+            label: `new-object-${Math.floor(Math.random() * 1000)}`,
+            sourceType: "file",
+            sourcePath: "",
+            region: userSettings.defaultRegion,
+          };
+
+          const objNode = {
+            id: objId,
+            type: "s3ObjectNode",
+            data: nodeData,
+            parentId: parentGroupId,
+            position: { x: 20 + col * 240, y: 60 + row * 80 },
+            zIndex: 0,
+            selected: true,
+          };
+
+          const updatedNodes = nds.map((n) => {
+            if (n.id === parentGroupId) {
+              const currentHeight = n.style?.height || 200;
+              const currentWidth = n.style?.width || 250;
+              return {
+                ...n,
+                selected: false,
+                style: {
+                  ...n.style,
+                  height: Math.max(currentHeight, minHeight),
+                  width: Math.max(currentWidth, minWidth),
+                },
+              };
+            }
+            if (n.parentId === parentGroupId) {
+              const idx = currentChildren.findIndex(child => child.id === n.id);
+              const r = Math.floor(idx / 2);
+              const c = idx % 2;
+              return {
+                ...n,
+                selected: false,
+                position: { x: 20 + c * 240, y: 60 + r * 80 },
+              };
+            }
+            return { ...n, selected: false };
+          });
+
+          const withoutObj = updatedNodes.filter((n) => n.id !== objNode.id);
+          return [...withoutObj, objNode];
+        });
+        setSelectedNodeId(objId);
+        addLog(`➕ Added S3 Object (Grouped).`, "success");
+        return;
+      } else {
+        newNode = {
+          id: `s3_obj_${Date.now()}`,
+          type: "s3ObjectNode",
+          data: {
+            label: `new-object-${Math.floor(Math.random() * 1000)}`,
+            sourceType: "file",
+            sourcePath: "",
+            region: userSettings.defaultRegion,
+          },
+          position: resolvedPosition,
+          zIndex: 0,
+        };
+        addLog(`➕ Added S3 Object.`, "info");
+      }
     } else if (nodeType === "ec2Node") {
       newNode = {
         id: `ec2_${Date.now()}`,
@@ -2160,6 +2654,7 @@ function CloudForgeEditor({
       }
 
       if (parentGroupId) {
+        const userId = `iam_user_${Date.now()}`;
         setNodes((nds) => {
           const currentChildren = nds.filter((n) => n.parentId === parentGroupId);
           const newChildrenCount = currentChildren.length + 1;
@@ -2177,12 +2672,13 @@ function CloudForgeEditor({
           };
 
           const userNode = {
-            id: `iam_user_${Date.now()}`,
+            id: userId,
             type: "iamNode",
             data: nodeData,
             parentId: parentGroupId,
             position: { x: 20 + col * 240, y: 60 + row * 80 },
             zIndex: 0,
+            selected: true,
           };
 
           const updatedNodes = nds.map((n) => {
@@ -2191,6 +2687,7 @@ function CloudForgeEditor({
               const currentWidth = n.style?.width || 250;
               return {
                 ...n,
+                selected: false,
                 style: {
                   ...n.style,
                   height: Math.max(currentHeight, minHeight),
@@ -2204,15 +2701,17 @@ function CloudForgeEditor({
               const c = idx % 2;
               return {
                 ...n,
+                selected: false,
                 position: { x: 20 + c * 240, y: 60 + r * 80 },
               };
             }
-            return n;
+            return { ...n, selected: false };
           });
 
           const withoutUser = updatedNodes.filter((n) => n.id !== userNode.id);
           return [...withoutUser, userNode];
         });
+        setSelectedNodeId(userId);
         addLog(`➕ Added IAM User (Grouped).`, "success");
         return;
       } else {
@@ -2257,11 +2756,13 @@ function CloudForgeEditor({
     }
 
     if (newNode) {
-      setNodes((nds) => nds.concat(newNode));
+      setNodes((nds) => nds.map((n) => ({ ...n, selected: false })).concat({ ...newNode, selected: true }));
+      setSelectedNodeId(newNode.id);
     }
-  }, [setNodes, takeSnapshot, addLog, userSettings.defaultRegion, nodes]);
+  }, [setNodes, takeSnapshot, addLog, userSettings.defaultRegion, nodes, setSelectedNodeId]);
 
   const addNewS3Node = () => spawnNode("s3Node");
+  const addNewS3ObjectNode = () => spawnNode("s3ObjectNode");
   const addNewEC2Node = () => spawnNode("ec2Node");
   const addNewIAMNode = (type) => spawnNode(type === "Group" ? "iamGroupNode" : "iamNode", type);
   const addNewShape = (type) => spawnNode("shapeNode", type);
@@ -2295,7 +2796,7 @@ function CloudForgeEditor({
 
         // Center offsets based on node type dimensions to drop exactly under cursor center
         let centeredPosition = { ...position };
-        if (nodeType === "s3Node" || nodeType === "ec2Node" || (nodeType === "iamNode" && labelType !== "Group")) {
+        if (nodeType === "s3Node" || nodeType === "s3ObjectNode" || nodeType === "ec2Node" || (nodeType === "iamNode" && labelType !== "Group")) {
           centeredPosition.x -= 110;
           centeredPosition.y -= 35;
         } else if (nodeType === "iamGroupNode" || labelType === "Group") {
@@ -2329,7 +2830,7 @@ function CloudForgeEditor({
   };
 
   const compileTerraform = async () => {
-    const awsNodes = nodes.filter((n) => n.type === "s3Node" || n.type === "iamNode" || n.type === "iamGroupNode" || n.type === "ec2Node");
+    const awsNodes = nodes.filter((n) => n.type === "s3Node" || n.type === "s3ObjectNode" || n.type === "iamNode" || n.type === "iamGroupNode" || n.type === "ec2Node");
     if (awsNodes.length === 0) {
       addLog("⚠️ Cannot synthesize environment without AWS resources.", "warn");
       return;
@@ -2670,6 +3171,11 @@ function CloudForgeEditor({
                             size={16}
                             className="text-amber-500 shrink-0"
                           />
+                        ) : res.type === "s3ObjectNode" ? (
+                          <File
+                            size={16}
+                            className="text-amber-500 shrink-0"
+                          />
                         ) : res.type === "iamNode" ? (
                           <Shield
                             size={16}
@@ -2689,12 +3195,14 @@ function CloudForgeEditor({
                           </span>
                           <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono uppercase mt-0.5 tracking-wider">
                             {res.type === "s3Node"
-                              ? "AWS S3"
-                              : res.type === "iamNode"
-                                ? `AWS IAM ${res.data?.iamType || "Resource"}`
-                                : res.type === "ec2Node"
-                                  ? "AWS EC2"
-                                  : "Shape / Group"}
+                              ? "AWS S3 Bucket"
+                              : res.type === "s3ObjectNode"
+                                ? "AWS S3 Object"
+                                : res.type === "iamNode"
+                                  ? `AWS IAM ${res.data?.iamType || "Resource"}`
+                                  : res.type === "ec2Node"
+                                    ? "AWS EC2"
+                                    : "Shape / Group"}
                           </span>
                         </div>
                       </button>
@@ -2755,7 +3263,7 @@ function CloudForgeEditor({
               <div
                 className={`flex flex-col gap-2 overflow-hidden transition-all duration-300 ease-in-out origin-top ${expandedCategories.aws ? "max-h-96 opacity-100 scale-y-100 mt-1" : "max-h-0 opacity-0 scale-y-0"}`}
               >
-                <div className="pl-6 pr-2 pb-1">
+                <div className="pl-6 pr-2 pb-1 flex flex-col gap-2">
                   <button
                     onClick={addNewS3Node}
                     draggable={true}
@@ -2768,6 +3276,24 @@ function CloudForgeEditor({
                       </div>
                       <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
                         S3 Bucket
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
+                      + Add
+                    </span>
+                  </button>
+                  <button
+                    onClick={addNewS3ObjectNode}
+                    draggable={true}
+                    onDragStart={(e) => onDragStart(e, "s3ObjectNode")}
+                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-1.5 bg-amber-100 dark:bg-amber-500/10 group-hover:bg-amber-200 dark:group-hover:bg-amber-500/20 rounded-md text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20 transition-all">
+                        <File size={14} />
+                      </div>
+                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
+                        S3 Object
                       </span>
                     </div>
                     <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
@@ -3259,20 +3785,47 @@ function CloudForgeEditor({
 
               {selectedNode.type === "s3Node" && (
                 <>
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-2">
                     <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
-                      Storage Capacity ({selectedNode.data?.storageGB || 10} GB)
+                      Storage Capacity
                     </label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="1000"
-                      value={selectedNode.data?.storageGB || 10}
-                      onChange={(e) =>
-                        updateNodeData("storageGB", parseInt(e.target.value))
-                      }
-                      className="w-full h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                    />
+                    {selectedNode.data?.isAutoSized ? (
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/10 border border-emerald-200 dark:border-emerald-800/30 rounded-xl">
+                        <div className="flex justify-between items-center text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                          <span>Auto-calculated:</span>
+                          <span className="font-mono bg-emerald-100 dark:bg-emerald-500/10 px-2 py-0.5 rounded">
+                            {selectedNode.data?.storageGB >= 1 
+                              ? `${(selectedNode.data?.storageGB).toFixed(3)} GB`
+                              : `${(selectedNode.data?.storageGB * 1024).toFixed(1)} MB`}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-500/80 font-medium mt-1.5 leading-normal">
+                          Calculated automatically from the actual filesystem files/folders inside your nested S3 Objects.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-zinc-400">
+                          <span>Manual Estimation:</span>
+                          <span className="font-mono text-amber-500 bg-slate-50 dark:bg-zinc-900 px-2 py-0.5 rounded">
+                            {selectedNode.data?.storageGB || 10} GB
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="1000"
+                          value={selectedNode.data?.storageGB || 10}
+                          onChange={(e) =>
+                             updateNodeData("storageGB", parseInt(e.target.value))
+                          }
+                          className="w-full h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                        />
+                        <p className="text-[10px] text-slate-400 dark:text-zinc-500 mt-1 leading-normal italic">
+                          Slide to estimate cost. Auto-calculates if nested S3 Objects are added.
+                        </p>
+                      </>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
@@ -3316,6 +3869,130 @@ function CloudForgeEditor({
                       />
                     </div>
                   </div>
+
+                  {/* SNAPPED OBJECTS LIST */}
+                  <div className="flex flex-col gap-2.5 pt-4 border-t border-slate-100 dark:border-zinc-800/80">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                      Snapped Objects
+                    </label>
+                    <div className="flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                      {nodes.filter((n) => n.parentId === selectedNode.id).length === 0 ? (
+                        <p className="text-xs text-slate-400 dark:text-zinc-500 italic">No objects snapped inside this bucket.</p>
+                      ) : (
+                        nodes.filter((n) => n.parentId === selectedNode.id).map((child) => (
+                          <div key={child.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 hover:border-amber-400/50 dark:hover:border-amber-500/30 transition-colors shadow-sm dark:shadow-none">
+                            <div className="flex flex-col min-w-0 flex-1 pr-2">
+                              <span className="text-xs font-bold text-slate-700 dark:text-zinc-200 truncate">
+                                {child.data?.label || "S3 Object"}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-500 truncate" title={child.data?.sourcePath || ""}>
+                                {child.data?.sourcePath ? child.data.sourcePath.split(/[\\/]/).pop() : "No path selected"}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                takeSnapshot();
+                                setNodes((nds) => nds.filter((n) => n.id !== child.id));
+                                setEdges((eds) => eds.filter((e) => e.source !== child.id && e.target !== child.id));
+                                addLog(`🗑️ Deleted S3 Object: ${child.data?.label || child.id}`, "warn");
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded transition-colors"
+                              title="Delete S3 Object"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {selectedNode.type === "s3ObjectNode" && (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                      Source Type
+                    </label>
+                    <div className="flex bg-slate-50 dark:bg-zinc-900 rounded-lg p-1 border border-slate-200 dark:border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => updateNodeData("sourceType", "file")}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${
+                          (selectedNode.data?.sourceType || "file") === "file"
+                            ? "bg-white dark:bg-zinc-850 text-amber-500 shadow-sm"
+                            : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        File
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateNodeData("sourceType", "folder")}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${
+                          selectedNode.data?.sourceType === "folder"
+                            ? "bg-white dark:bg-zinc-850 text-amber-500 shadow-sm"
+                            : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        Folder
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                      Source Path
+                    </label>
+                    <div className="flex flex-col gap-2">
+                      <textarea
+                        rows={2}
+                        readOnly
+                        value={selectedNode.data?.sourcePath || "No path selected"}
+                        placeholder="Click browse to select a path..."
+                        className="w-full p-2 bg-slate-50 dark:bg-zinc-900 text-xs font-mono text-slate-600 dark:text-zinc-400 rounded-lg border border-slate-200 dark:border-zinc-800 resize-none shadow-inner select-all outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => openFsBrowser(selectedNode.data?.sourcePath, async (path) => {
+                          let sizeGB = 0;
+                          try {
+                            const res = await fetch(`http://localhost:3001/api/fs/size?path=${encodeURIComponent(path)}`);
+                            if (res.ok) {
+                              const sizeData = await res.json();
+                              sizeGB = sizeData.sizeBytes / (1024 * 1024 * 1024);
+                            }
+                          } catch (e) {
+                            console.error("Failed to fetch folder/file size:", e);
+                          }
+                          
+                          setNodes((nds) =>
+                            nds.map((node) => {
+                              if (node.id === selectedNodeId) {
+                                return {
+                                  ...node,
+                                  data: {
+                                    ...node.data,
+                                    sourcePath: path,
+                                    sizeGB,
+                                  },
+                                };
+                              }
+                              return node;
+                            })
+                          );
+                        })}
+                        className="w-full flex items-center justify-center gap-2 h-10 text-xs font-bold rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 transition-colors shadow-sm"
+                      >
+                        <FolderOpen size={14} className="text-amber-500" /> Browse Filesystem...
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-slate-400 dark:text-zinc-500 mt-1 italic">
+                      Note: Choose a folder prefix or file to sync with S3. Avoid adding thousands of individual file nodes to keep the canvas fast.
+                    </span>
+                  </div>
                 </>
               )}
 
@@ -3330,6 +4007,44 @@ function CloudForgeEditor({
                       onChange={(val) => updateNodeData("region", val)}
                       className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
                     />
+                  </div>
+
+                  {/* GROUP MEMBERS LIST */}
+                  <div className="flex flex-col gap-2.5 pt-4 border-t border-slate-100 dark:border-zinc-800/80">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                      Group Members
+                    </label>
+                    <div className="flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                      {nodes.filter((n) => n.parentId === selectedNode.id).length === 0 ? (
+                        <p className="text-xs text-slate-400 dark:text-zinc-500 italic">No members snapped inside this group.</p>
+                      ) : (
+                        nodes.filter((n) => n.parentId === selectedNode.id).map((child) => (
+                          <div key={child.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 hover:border-violet-400/50 dark:hover:border-violet-500/30 transition-colors shadow-sm dark:shadow-none">
+                            <div className="flex flex-col min-w-0 flex-1 pr-2">
+                              <span className="text-xs font-bold text-slate-700 dark:text-zinc-200 truncate">
+                                {child.data?.label || "IAM User"}
+                              </span>
+                              <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">
+                                Type: {child.data?.iamType || "User"}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                takeSnapshot();
+                                setNodes((nds) => nds.filter((n) => n.id !== child.id));
+                                setEdges((eds) => eds.filter((e) => e.source !== child.id && e.target !== child.id));
+                                addLog(`🗑️ Deleted Group Member: ${child.data?.label || child.id}`, "warn");
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded transition-colors"
+                              title="Delete Group Member"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </>
               )}
@@ -3682,6 +4397,156 @@ function CloudForgeEditor({
           );
         })()}
 
+        {/* FILESYSTEM BROWSER MODAL */}
+        {isFsModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center animate-fade-in p-4">
+            <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-2xl h-[500px] flex flex-col shadow-2xl overflow-hidden animate-scale-up">
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20">
+                <div className="flex items-center gap-2 text-slate-800 dark:text-zinc-200">
+                  <FolderOpen size={18} className="text-amber-500" />
+                  <h3 className="font-bold text-sm uppercase tracking-wide">
+                    Select Local File or Folder
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsFsModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Current Path Breadcrumbs */}
+              <div className="px-4 py-2 bg-slate-100/50 dark:bg-zinc-900/40 border-b border-slate-200/50 dark:border-zinc-900 flex items-center gap-1 overflow-x-auto custom-scrollbar font-mono text-xs text-slate-500 dark:text-zinc-400">
+                <button
+                  onClick={() => fetchFsDirectory("")}
+                  className="hover:text-amber-500 hover:underline shrink-0"
+                >
+                  Root
+                </button>
+                {(() => {
+                  const parts = fsCurrentPath.split(/[\\/]/).filter(Boolean);
+                  let currentBuild = "";
+                  const hasDrive = fsCurrentPath.match(/^[a-zA-Z]:/);
+                  
+                  return parts.map((part, index) => {
+                    if (index === 0 && hasDrive) {
+                      currentBuild = part + "\\";
+                    } else {
+                      currentBuild += (currentBuild.endsWith("\\") || currentBuild.endsWith("/") ? "" : "/") + part;
+                    }
+                    const thisPath = currentBuild;
+                    return (
+                      <React.Fragment key={index}>
+                        <span>/</span>
+                        <button
+                          onClick={() => fetchFsDirectory(thisPath)}
+                          className="hover:text-amber-500 hover:underline shrink-0"
+                        >
+                          {part}
+                        </button>
+                      </React.Fragment>
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* List of files/folders */}
+              <div className="flex-1 overflow-y-auto p-2 custom-scrollbar bg-white dark:bg-zinc-950">
+                <div className="flex flex-col gap-1">
+                  {/* Go Up (Parent) row */}
+                  {fsParentPath && fsParentPath !== fsCurrentPath && (
+                    <div
+                      onDoubleClick={() => fetchFsDirectory(fsParentPath)}
+                      onClick={() => setFsSelectedItem({ name: "..", path: fsParentPath, isDir: true })}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                        fsSelectedItem?.name === ".."
+                          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                          : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900 border border-transparent"
+                      }`}
+                    >
+                      <FolderOpen size={16} className="text-amber-500/70 shrink-0" />
+                      <span>.. (Parent Directory)</span>
+                    </div>
+                  )}
+
+                  {/* Folders */}
+                  {fsFolders.map((folder) => (
+                    <div
+                      key={folder.path}
+                      onDoubleClick={() => fetchFsDirectory(folder.path)}
+                      onClick={() => setFsSelectedItem(folder)}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                        fsSelectedItem?.path === folder.path
+                          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                          : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-900 border border-transparent"
+                      }`}
+                    >
+                      <Folder size={16} className="text-amber-500 shrink-0" />
+                      <span className="truncate">{folder.name}</span>
+                    </div>
+                  ))}
+
+                  {/* Files */}
+                  {fsFiles.map((file) => (
+                    <div
+                      key={file.path}
+                      onDoubleClick={() => {
+                        fsOnSelect(file.path, false);
+                        setIsFsModalOpen(false);
+                      }}
+                      onClick={() => setFsSelectedItem(file)}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                        fsSelectedItem?.path === file.path
+                          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                          : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-900 border border-transparent"
+                      }`}
+                    >
+                      <File size={16} className="text-slate-400 dark:text-zinc-600 shrink-0" />
+                      <span className="truncate">{file.name}</span>
+                    </div>
+                  ))}
+
+                  {fsFolders.length === 0 && fsFiles.length === 0 && (
+                    <div className="py-12 text-center text-xs font-medium text-slate-400 dark:text-zinc-600">
+                      This directory is empty.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 flex items-center justify-between gap-4">
+                <div className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 truncate flex-1">
+                  <span className="font-bold font-sans text-slate-400 dark:text-zinc-500 uppercase mr-1">Selected:</span>
+                  {fsSelectedItem ? fsSelectedItem.path : "None"}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => setIsFsModalOpen(false)}
+                    className="px-4 h-9 text-xs font-bold rounded-lg border border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-900 text-slate-600 dark:text-zinc-400 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={!fsSelectedItem || fsSelectedItem.name === ".."}
+                    onClick={() => {
+                      if (fsSelectedItem) {
+                        fsOnSelect(fsSelectedItem.path, fsSelectedItem.isDir);
+                        setIsFsModalOpen(false);
+                      }
+                    }}
+                    className="px-4 h-9 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-white dark:text-zinc-950 transition-colors shadow-md"
+                  >
+                    Select
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* DIAGNOSTICS OVERLAY */}
         {isDiagnosticsOpen && (
           <div className="fixed inset-0 bg-white/95 dark:bg-zinc-950/90 backdrop-blur-xl z-[60] flex flex-col animate-fade-in">
@@ -3692,7 +4557,7 @@ function CloudForgeEditor({
               </div>
               <button
                 onClick={() => setIsDiagnosticsOpen(false)}
-                className="text-slate-500 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-zinc-200 p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2"
+                className="text-slate-500 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-zinc-200 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2"
               >
                 <span className="text-xs font-bold uppercase tracking-wider">
                   Close
@@ -3906,7 +4771,7 @@ function CloudForgeEditor({
                 </div>
                 <button
                   onClick={() => setIsModalOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-900"
+                  className="text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800"
                 >
                   <X size={16} />
                 </button>
