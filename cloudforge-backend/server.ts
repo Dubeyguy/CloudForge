@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { App, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 
 // Imports mapped to your local .gen folder
 import { AwsProvider } from './.gen/providers/aws/provider';
@@ -290,7 +291,7 @@ class CloudForgeStack extends TerraformStack {
     });
 
     // Track groups per user to avoid overriding multiple memberships
-    const userGroups = new Map<string, { userRef: IamUser; userLabel: string; groupNames: string[] }>();
+    const userGroups = new Map<string, { userRef: IamUser; userLabel: string; groupNames: string[]; groupRefs: IamGroup[] }>();
 
     edges.forEach((edge, index) => {
       const sourceNode = resourceMap.get(edge.source);
@@ -311,9 +312,10 @@ class CloudForgeStack extends TerraformStack {
         const groupRef = groupNode.ref as IamGroup;
 
         if (!userGroups.has(userNodeId)) {
-          userGroups.set(userNodeId, { userRef, userLabel: userNode.name, groupNames: [] });
+          userGroups.set(userNodeId, { userRef, userLabel: userNode.name, groupNames: [], groupRefs: [] });
         }
         userGroups.get(userNodeId)!.groupNames.push(groupRef.name);
+        userGroups.get(userNodeId)!.groupRefs.push(groupRef);
       }
 
       // Policy <-> User/Group/Role Attachment
@@ -385,16 +387,21 @@ class CloudForgeStack extends TerraformStack {
           childNode.iamType === 'User'
         ) {
           const userRef = childNode.ref as IamUser;
-          const groupName = parentNode.name;
+          const groupRef = parentNode.ref as IamGroup;
+          const groupName = groupRef.name;
           const userNodeId = node.id;
 
           if (!userGroups.has(userNodeId)) {
-            userGroups.set(userNodeId, { userRef, userLabel: childNode.name, groupNames: [] });
+            userGroups.set(userNodeId, { userRef, userLabel: childNode.name, groupNames: [], groupRefs: [] });
           }
 
           const groups = userGroups.get(userNodeId)!.groupNames;
+          const groupRefs = userGroups.get(userNodeId)!.groupRefs;
           if (!groups.includes(groupName)) {
             groups.push(groupName);
+          }
+          if (!groupRefs.includes(groupRef)) {
+            groupRefs.push(groupRef);
           }
         }
       }
@@ -406,6 +413,7 @@ class CloudForgeStack extends TerraformStack {
       new IamUserGroupMembership(this, safeMembershipId, {
         user: val.userRef.name,
         groups: val.groupNames,
+        dependsOn: val.groupRefs,
       });
     });
   }
@@ -860,6 +868,330 @@ app.get('/api/fs/size', (req, res): any => {
   } catch (err) {
     res.status(500).json({ error: "Failed to calculate path size", details: String(err) });
   }
+});
+
+let activeProcess: ChildProcessWithoutNullStreams | null = null;
+
+const stripAnsi = (str: string) => {
+  return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+};
+
+app.post('/api/deploy/input', (req, res): any => {
+  const { input } = req.body;
+  if (activeProcess && !activeProcess.killed) {
+    activeProcess.stdin.write(input + "\n");
+    return res.json({ success: true });
+  }
+  return res.status(400).json({ error: "No active deployment process running" });
+});
+
+app.get('/api/deploy/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  const sendSSE = (data: any) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const deployDir = path.join(__dirname, 'cdktf.out', 'stacks', 'cloudforge-export');
+  if (!fs.existsSync(deployDir)) {
+    sendSSE({ type: "stderr", text: "❌ CDKTF synthesis output not found. Please compile the stack first.\n" });
+    sendSSE({ type: "exit", code: 1 });
+    res.end();
+    return;
+  }
+
+  const isWindows = process.platform === 'win32';
+  const localTerraformPath = path.join(__dirname, isWindows ? 'terraform.exe' : 'terraform');
+  const terraformCmd = fs.existsSync(localTerraformPath) ? localTerraformPath : 'terraform';
+
+  sendSSE({ type: "stdout", text: `🚀 Starting deployment process in:\n📁 ${deployDir}\n\n` });
+
+  // Run a command helper
+  const runTerraformCommand = (args: string[]): Promise<number> => {
+    return new Promise((resolve) => {
+      sendSSE({ type: "stdout", text: `\n✨ Running: terraform ${args.join(' ')}\n` });
+      
+      const proc = spawn(terraformCmd, args, { cwd: deployDir });
+      activeProcess = proc;
+
+      proc.stdout.on('data', (data) => {
+        const text = stripAnsi(data.toString());
+        sendSSE({ type: "stdout", text });
+        if (text.toLowerCase().includes('enter a value:')) {
+          sendSSE({ type: "awaitingInput" });
+        }
+      });
+
+      proc.stderr.on('data', (data) => {
+        const text = stripAnsi(data.toString());
+        sendSSE({ type: "stderr", text });
+      });
+
+      proc.on('close', (code) => {
+        activeProcess = null;
+        resolve(code || 0);
+      });
+
+      proc.on('error', (err) => {
+        sendSSE({ type: "stderr", text: `❌ Execution error: ${err.message}\n` });
+        activeProcess = null;
+        resolve(1);
+      });
+    });
+  };
+
+  // Run init, plan, then apply
+  (async () => {
+    let code = await runTerraformCommand(['init']);
+    if (code !== 0) {
+      sendSSE({ type: "stderr", text: `\n❌ terraform init failed with exit code ${code}\n` });
+      sendSSE({ type: "exit", code });
+      res.end();
+      return;
+    }
+
+    code = await runTerraformCommand(['plan', '-lock=false']);
+    if (code !== 0) {
+      sendSSE({ type: "stderr", text: `\n❌ terraform plan failed with exit code ${code}\n` });
+      sendSSE({ type: "exit", code });
+      res.end();
+      return;
+    }
+
+    code = await runTerraformCommand(['apply', '-lock=false']);
+    if (code !== 0) {
+      sendSSE({ type: "stderr", text: `\n❌ terraform apply failed with exit code ${code}\n` });
+      sendSSE({ type: "exit", code });
+      res.end();
+      return;
+    }
+
+    // Save deployment state file
+    const generatedFilePath = path.join(deployDir, 'cdk.tf.json');
+    const deployedFilePath = path.join(__dirname, 'deployed-cdk.tf.json');
+    try {
+      fs.copyFileSync(generatedFilePath, deployedFilePath);
+
+      // Save history record
+      const timestamp = Date.now();
+      const recordId = `deploy-${timestamp}`;
+      const DEPLOYMENTS_DIR = path.join(__dirname, 'deployments');
+      if (!fs.existsSync(DEPLOYMENTS_DIR)) {
+        fs.mkdirSync(DEPLOYMENTS_DIR, { recursive: true });
+      }
+      const recordPath = path.join(DEPLOYMENTS_DIR, `${recordId}.json`);
+      const schemaCode = JSON.parse(fs.readFileSync(generatedFilePath, 'utf-8'));
+      const record = {
+        id: recordId,
+        timestamp,
+        code: schemaCode
+      };
+      fs.writeFileSync(recordPath, JSON.stringify(record, null, 2), 'utf-8');
+
+      sendSSE({ type: "stdout", text: "💾 Deployment state and record saved successfully.\n" });
+    } catch (e: any) {
+      sendSSE({ type: "stderr", text: `⚠️ Warning: Failed to save deployment state file: ${e.message}\n` });
+    }
+
+    sendSSE({ type: "stdout", text: "\n🎉 Deployment successfully completed!\n" });
+    sendSSE({ type: "exit", code: 0 });
+    res.end();
+  })();
+
+  req.on('close', () => {
+    if (activeProcess) {
+      activeProcess.kill();
+      activeProcess = null;
+    }
+  });
+});
+
+const DEPLOYMENTS_DIR = path.join(__dirname, 'deployments');
+if (!fs.existsSync(DEPLOYMENTS_DIR)) {
+  fs.mkdirSync(DEPLOYMENTS_DIR, { recursive: true });
+}
+
+app.get('/api/deploy/status', (_req, res) => {
+  const deployedFilePath = path.join(__dirname, 'deployed-cdk.tf.json');
+  const deployed = fs.existsSync(deployedFilePath);
+  
+  let latestDeploymentId: string | null = null;
+  if (fs.existsSync(DEPLOYMENTS_DIR)) {
+    const files = fs.readdirSync(DEPLOYMENTS_DIR)
+      .filter(f => f.startsWith('deploy-') && f.endsWith('.json'))
+      .sort((a, b) => b.localeCompare(a));
+    if (files.length > 0) {
+      latestDeploymentId = files[0].replace('.json', '');
+    }
+  }
+  
+  res.json({ deployed, latestDeploymentId });
+});
+
+app.get('/api/deployments', (_req, res) => {
+  try {
+    if (!fs.existsSync(DEPLOYMENTS_DIR)) {
+      res.json([]);
+      return;
+    }
+    const files = fs.readdirSync(DEPLOYMENTS_DIR)
+      .filter(f => f.startsWith('deploy-') && f.endsWith('.json'));
+    
+    const deployments = files.map(file => {
+      const filePath = path.join(DEPLOYMENTS_DIR, file);
+      const content = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(content);
+    }).sort((a, b) => b.timestamp - a.timestamp);
+
+    res.json(deployments);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load deployments", details: String(err) });
+  }
+});
+
+app.post('/api/deployments/redeploy', (req, res) => {
+  const { deploymentId } = req.body;
+  if (!deploymentId) {
+    res.status(400).json({ error: "deploymentId is required" });
+    return;
+  }
+
+  const recordPath = path.join(DEPLOYMENTS_DIR, `${deploymentId}.json`);
+  if (!fs.existsSync(recordPath)) {
+    res.status(404).json({ error: "Deployment not found" });
+    return;
+  }
+
+  try {
+    const record = JSON.parse(fs.readFileSync(recordPath, 'utf-8'));
+    const deployDir = path.join(__dirname, 'cdktf.out', 'stacks', 'cloudforge-export');
+    if (!fs.existsSync(deployDir)) {
+      fs.mkdirSync(deployDir, { recursive: true });
+    }
+    const targetPath = path.join(deployDir, 'cdk.tf.json');
+    fs.writeFileSync(targetPath, JSON.stringify(record.code, null, 2), 'utf-8');
+    
+    res.json({ success: true, message: "Code loaded into active workspace" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to redeploy configuration", details: String(err) });
+  }
+});
+
+app.delete('/api/deployments', (_req, res) => {
+  try {
+    if (fs.existsSync(DEPLOYMENTS_DIR)) {
+      const files = fs.readdirSync(DEPLOYMENTS_DIR)
+        .filter(f => f.startsWith('deploy-') && f.endsWith('.json'));
+      files.forEach(file => {
+        fs.unlinkSync(path.join(DEPLOYMENTS_DIR, file));
+      });
+    }
+    res.json({ success: true, message: "Deployments history cleared successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to clear deployments", details: String(err) });
+  }
+});
+
+app.get('/api/destroy/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  const sendSSE = (data: any) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const deployDir = path.join(__dirname, 'cdktf.out', 'stacks', 'cloudforge-export');
+  if (!fs.existsSync(deployDir)) {
+    sendSSE({ type: "stderr", text: "❌ CDKTF synthesis output not found. Please compile the stack first.\n" });
+    sendSSE({ type: "exit", code: 1 });
+    res.end();
+    return;
+  }
+
+  const isWindows = process.platform === 'win32';
+  const localTerraformPath = path.join(__dirname, isWindows ? 'terraform.exe' : 'terraform');
+  const terraformCmd = fs.existsSync(localTerraformPath) ? localTerraformPath : 'terraform';
+
+  sendSSE({ type: "stdout", text: `🚀 Starting destruction process in:\n📁 ${deployDir}\n\n` });
+
+  const runTerraformCommand = (args: string[]): Promise<number> => {
+    return new Promise((resolve) => {
+      sendSSE({ type: "stdout", text: `\n✨ Running: terraform ${args.join(' ')}\n` });
+      
+      const proc = spawn(terraformCmd, args, { cwd: deployDir });
+      activeProcess = proc;
+
+      proc.stdout.on('data', (data) => {
+        const text = stripAnsi(data.toString());
+        sendSSE({ type: "stdout", text });
+        if (text.toLowerCase().includes('enter a value:')) {
+          sendSSE({ type: "awaitingInput" });
+        }
+      });
+
+      proc.stderr.on('data', (data) => {
+        const text = stripAnsi(data.toString());
+        sendSSE({ type: "stderr", text });
+      });
+
+      proc.on('close', (code) => {
+        activeProcess = null;
+        resolve(code || 0);
+      });
+
+      proc.on('error', (err) => {
+        sendSSE({ type: "stderr", text: `❌ Execution error: ${err.message}\n` });
+        activeProcess = null;
+        resolve(1);
+      });
+    });
+  };
+
+  (async () => {
+    let code = await runTerraformCommand(['init']);
+    if (code !== 0) {
+      sendSSE({ type: "stderr", text: `\n❌ terraform init failed with exit code ${code}\n` });
+      sendSSE({ type: "exit", code });
+      res.end();
+      return;
+    }
+
+    code = await runTerraformCommand(['destroy', '-lock=false']);
+    if (code !== 0) {
+      sendSSE({ type: "stderr", text: `\n❌ terraform destroy failed with exit code ${code}\n` });
+      sendSSE({ type: "exit", code });
+      res.end();
+      return;
+    }
+
+    const deployedFilePath = path.join(__dirname, 'deployed-cdk.tf.json');
+    if (fs.existsSync(deployedFilePath)) {
+      try {
+        fs.unlinkSync(deployedFilePath);
+        sendSSE({ type: "stdout", text: "🗑️ Deployment state file removed.\n" });
+      } catch (e: any) {
+        sendSSE({ type: "stderr", text: `⚠️ Warning: Failed to remove deployment state file: ${e.message}\n` });
+      }
+    }
+
+    sendSSE({ type: "stdout", text: "\n🎉 Infrastructure successfully destroyed!\n" });
+    sendSSE({ type: "exit", code: 0 });
+    res.end();
+  })();
+
+  req.on('close', () => {
+    if (activeProcess) {
+      activeProcess.kill();
+      activeProcess = null;
+    }
+  });
 });
 
 const PORT = 3001;

@@ -13,6 +13,7 @@ import {
   ConnectionMode,
   reconnectEdge, // <-- Added for Edge Reconnection
   useStore,
+  applyNodeChanges,
 } from "@xyflow/react";
 import {
   Play,
@@ -63,6 +64,7 @@ import {
   Folder,
   Upload,
   Server,
+  History,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
@@ -553,7 +555,38 @@ const S3Node = ({ id, data, selected }) => {
   const { setNodes, setEdges } = useReactFlow();
 
   const handleDeleteChild = (childId) => {
-    setNodes((nds) => nds.filter((n) => n.id !== childId));
+    setNodes((nds) => {
+      const remainingChildren = nds.filter((n) => n.parentId === id && n.id !== childId);
+      const newChildrenCount = remainingChildren.length;
+      
+      const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
+      const newWidth = newChildrenCount > 1 ? 500 : 300;
+
+      return nds
+        .filter((n) => n.id !== childId)
+        .map((n) => {
+          if (n.id === id) {
+            return {
+              ...n,
+              style: {
+                ...n.style,
+                height: newHeight,
+                width: newWidth,
+              }
+            };
+          }
+          if (n.parentId === id) {
+            const childIndex = remainingChildren.findIndex(child => child.id === n.id);
+            const row = Math.floor(childIndex / 2);
+            const col = childIndex % 2;
+            return {
+              ...n,
+              position: { x: 20 + col * 240, y: 60 + row * 80 }
+            };
+          }
+          return n;
+        });
+    });
     setEdges((eds) => eds.filter((e) => e.source !== childId && e.target !== childId));
   };
 
@@ -947,7 +980,38 @@ const IAMGroupNode = ({ id, data, selected }) => {
   const { setNodes, setEdges } = useReactFlow();
 
   const handleDeleteChild = (childId) => {
-    setNodes((nds) => nds.filter((n) => n.id !== childId));
+    setNodes((nds) => {
+      const remainingChildren = nds.filter((n) => n.parentId === id && n.id !== childId);
+      const newChildrenCount = remainingChildren.length;
+      
+      const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
+      const newWidth = newChildrenCount > 1 ? 500 : 300;
+
+      return nds
+        .filter((n) => n.id !== childId)
+        .map((n) => {
+          if (n.id === id) {
+            return {
+              ...n,
+              style: {
+                ...n.style,
+                height: newHeight,
+                width: newWidth,
+              }
+            };
+          }
+          if (n.parentId === id) {
+            const childIndex = remainingChildren.findIndex(child => child.id === n.id);
+            const row = Math.floor(childIndex / 2);
+            const col = childIndex % 2;
+            return {
+              ...n,
+              position: { x: 20 + col * 240, y: 60 + row * 80 }
+            };
+          }
+          return n;
+        });
+    });
     setEdges((eds) => eds.filter((e) => e.source !== childId && e.target !== childId));
   };
 
@@ -1406,8 +1470,66 @@ function CloudForgeEditor({
   const prevGlobalIndex = useRef(-1);
   const connectionMade = useRef(false);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(
+  const [nodes, setNodes, standardOnNodesChange] = useNodesState(
     activeProject?.nodes || [],
+  );
+
+  const onNodesChange = useCallback(
+    (changes) => {
+      const removeChanges = changes.filter((c) => c.type === "remove");
+      if (removeChanges.length > 0) {
+        const removedIds = removeChanges.map((c) => c.id);
+        setNodes((nds) => {
+          const parentIdsToUpdate = new Set();
+          nds.forEach((n) => {
+            if (removedIds.includes(n.id) && n.parentId) {
+              parentIdsToUpdate.add(n.parentId);
+            }
+          });
+
+          let nextNodes = applyNodeChanges(changes, nds);
+
+          parentIdsToUpdate.forEach((parentId) => {
+            const parentGroupNode = nextNodes.find((n) => n.id === parentId);
+            if (parentGroupNode) {
+              const remainingChildren = nextNodes.filter((n) => n.parentId === parentId);
+              const newChildrenCount = remainingChildren.length;
+              
+              const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
+              const newWidth = newChildrenCount > 1 ? 500 : 300;
+
+              nextNodes = nextNodes.map((n) => {
+                if (n.id === parentId) {
+                  return {
+                    ...n,
+                    style: {
+                      ...n.style,
+                      height: newHeight,
+                      width: newWidth,
+                    },
+                  };
+                }
+                if (n.parentId === parentId) {
+                  const childIndex = remainingChildren.findIndex((child) => child.id === n.id);
+                  const row = Math.floor(childIndex / 2);
+                  const col = childIndex % 2;
+                  return {
+                    ...n,
+                    position: { x: 20 + col * 240, y: 60 + row * 80 },
+                  };
+                }
+                return n;
+              });
+            }
+          });
+
+          return nextNodes;
+        });
+      } else {
+        standardOnNodesChange(changes);
+      }
+    },
+    [standardOnNodesChange, setNodes]
   );
   const [edges, setEdges, onEdgesChange] = useEdgesState(
     activeProject?.edges || [],
@@ -1518,6 +1640,55 @@ function CloudForgeEditor({
   const [future, setFuture] = useState([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalView, setModalView] = useState("code"); // "code" or "terminal"
+  const [terminalLogs, setTerminalLogs] = useState([]);
+  const [terminalInput, setTerminalInput] = useState("");
+  const [awaitingInput, setAwaitingInput] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [hasDeployment, setHasDeployment] = useState(false);
+  const [terminalMode, setTerminalMode] = useState("deploy"); // "deploy" or "destroy"
+  const [isDeploymentsModalOpen, setIsDeploymentsModalOpen] = useState(false);
+  const [deployments, setDeployments] = useState([]);
+  const [selectedDeployment, setSelectedDeployment] = useState(null);
+  const [latestDeploymentId, setLatestDeploymentId] = useState(null);
+  const eventSourceRef = useRef(null);
+  const terminalEndRef = useRef(null);
+
+  const checkDeploymentStatus = useCallback(async () => {
+    try {
+      const response = await fetch("http://localhost:3001/api/deploy/status");
+      if (response.ok) {
+        const data = await response.json();
+        setHasDeployment(data.deployed);
+        setLatestDeploymentId(data.latestDeploymentId);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch deployment status:", err);
+    }
+  }, []);
+
+  const fetchDeploymentsList = useCallback(async () => {
+    try {
+      const response = await fetch("http://localhost:3001/api/deployments");
+      if (response.ok) {
+        const data = await response.json();
+        setDeployments(data);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch deployments list:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (terminalEndRef.current) {
+      terminalEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [terminalLogs]);
+
+  useEffect(() => {
+    checkDeploymentStatus();
+    fetchDeploymentsList();
+  }, [checkDeploymentStatus, fetchDeploymentsList]);
   const [isInstanceModalOpen, setIsInstanceModalOpen] = useState(false);
   const [instanceActiveTab, setInstanceActiveTab] = useState("All");
   const [instanceSearchQuery, setInstanceSearchQuery] = useState("");
@@ -2021,12 +2192,14 @@ function CloudForgeEditor({
                 }
 
                 if (n.id === parentGroupNode.id) {
+                  const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
+                  const newWidth = newChildrenCount > 1 ? 500 : 300;
                   return {
                     ...n,
                     style: {
                       ...n.style,
-                      height: Math.max(n.style?.height || 200, minHeight),
-                      width: Math.max(n.style?.width || 250, minWidth),
+                      height: newHeight,
+                      width: newWidth,
                     }
                   };
                 }
@@ -2281,7 +2454,43 @@ function CloudForgeEditor({
     if (!contextMenu) return;
     takeSnapshot();
     if (contextMenu.type === "node") {
-      setNodes((nds) => nds.filter((n) => n.id !== contextMenu.id));
+      setNodes((nds) => {
+        const nodeToDelete = nds.find((n) => n.id === contextMenu.id);
+        const parentId = nodeToDelete?.parentId;
+        const nextNodesFiltered = nds.filter((n) => n.id !== contextMenu.id);
+
+        if (parentId) {
+          const remainingChildren = nextNodesFiltered.filter((n) => n.parentId === parentId);
+          const newChildrenCount = remainingChildren.length;
+          
+          const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
+          const newWidth = newChildrenCount > 1 ? 500 : 300;
+
+          return nextNodesFiltered.map((n) => {
+            if (n.id === parentId) {
+              return {
+                ...n,
+                style: {
+                  ...n.style,
+                  height: newHeight,
+                  width: newWidth,
+                }
+              };
+            }
+            if (n.parentId === parentId) {
+              const childIndex = remainingChildren.findIndex(child => child.id === n.id);
+              const row = Math.floor(childIndex / 2);
+              const col = childIndex % 2;
+              return {
+                ...n,
+                position: { x: 20 + col * 240, y: 60 + row * 80 }
+              };
+            }
+            return n;
+          });
+        }
+        return nextNodesFiltered;
+      });
       setEdges((eds) =>
         eds.filter(
           (e) => e.source !== contextMenu.id && e.target !== contextMenu.id,
@@ -2873,6 +3082,165 @@ function CloudForgeEditor({
     setTimeout(() => setIsCopied(false), 2000);
   };
 
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    setModalView("code");
+    checkDeploymentStatus();
+  };
+
+  const handleDeploy = () => {
+    setTerminalMode("deploy");
+    setModalView("terminal");
+    setTerminalLogs([]);
+    setAwaitingInput(false);
+    setIsDeploying(true);
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    const eventSource = new EventSource("http://localhost:3001/api/deploy/stream");
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "stdout" || data.type === "stderr") {
+        setTerminalLogs((prev) => [...prev, data.text]);
+      } else if (data.type === "awaitingInput") {
+        setAwaitingInput(true);
+      } else if (data.type === "exit") {
+        setIsDeploying(false);
+        setAwaitingInput(false);
+        eventSource.close();
+        checkDeploymentStatus();
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      setTerminalLogs((prev) => [...prev, "\n❌ Deployment stream disconnected or failed to connect.\n"]);
+      setIsDeploying(false);
+      setAwaitingInput(false);
+      eventSource.close();
+      checkDeploymentStatus();
+    };
+
+    eventSourceRef.current = eventSource;
+  };
+
+  const handleDestroy = () => {
+    setTerminalMode("destroy");
+    setModalView("terminal");
+    setTerminalLogs([]);
+    setAwaitingInput(false);
+    setIsDeploying(true);
+    setIsModalOpen(true);
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    const eventSource = new EventSource("http://localhost:3001/api/destroy/stream");
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "stdout" || data.type === "stderr") {
+        setTerminalLogs((prev) => [...prev, data.text]);
+      } else if (data.type === "awaitingInput") {
+        setAwaitingInput(true);
+      } else if (data.type === "exit") {
+        setIsDeploying(false);
+        setAwaitingInput(false);
+        eventSource.close();
+        checkDeploymentStatus();
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      setTerminalLogs((prev) => [...prev, "\n❌ Destruction stream disconnected or failed to connect.\n"]);
+      setIsDeploying(false);
+      setAwaitingInput(false);
+      eventSource.close();
+      checkDeploymentStatus();
+    };
+
+    eventSourceRef.current = eventSource;
+  };
+
+  const handleRedeploy = async (deploymentId) => {
+    try {
+      const response = await fetch("http://localhost:3001/api/deployments/redeploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deploymentId }),
+      });
+      if (response.ok) {
+        // Close deployments modal and open compilation modal
+        setIsDeploymentsModalOpen(false);
+        
+        // Retrieve the deployment details to set generatedCode so it is shown in Code tab if they navigate back
+        const depItem = deployments.find(d => d.id === deploymentId);
+        if (depItem) {
+          setGeneratedCode(JSON.stringify(depItem.code, null, 2));
+        }
+        
+        setIsModalOpen(true);
+        handleDeploy(); // Start the deployment stream terminal
+      } else {
+        addLog("❌ Failed to load deployment configuration.", "error");
+      }
+    } catch (err) {
+      addLog(`❌ Redeployment network error: ${err.message}`, "error");
+    }
+  };
+
+  const handleClearHistory = async () => {
+    const confirmClear = window.confirm("Are you sure you want to clear the entire deployment history? This will delete all saved versions.");
+    if (!confirmClear) return;
+
+    try {
+      const response = await fetch("http://localhost:3001/api/deployments", {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        setDeployments([]);
+        setSelectedDeployment(null);
+        addLog("🧹 Deployment history cleared successfully.", "success");
+      } else {
+        addLog("❌ Failed to clear deployment history.", "error");
+      }
+    } catch (err) {
+      console.error("Failed to clear deployments history:", err);
+      addLog("❌ Network error clearing deployment history.", "error");
+    }
+  };
+
+  const sendTerminalInput = async (e) => {
+    e.preventDefault();
+    const input = terminalInput.trim();
+    if (!input) return;
+
+    // Echo input locally on terminal
+    setTerminalLogs((prev) => [...prev, `${input}\n`]);
+    setTerminalInput("");
+    setAwaitingInput(false);
+
+    try {
+      const response = await fetch("http://localhost:3001/api/deploy/input", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input }),
+      });
+      if (!response.ok) {
+        setTerminalLogs((prev) => [...prev, "❌ Failed to send input to backend.\n"]);
+      }
+    } catch (err) {
+      setTerminalLogs((prev) => [...prev, `❌ Network error sending input: ${err.message}\n`]);
+    }
+  };
+
   const downloadFile = () => {
     const blob = new Blob([generatedCode], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -3219,6 +3587,16 @@ function CloudForgeEditor({
 
           {/* Right Island (Actions) */}
           <div className="flex items-center gap-3 pointer-events-auto">
+            <button
+              onClick={() => {
+                fetchDeploymentsList();
+                setIsDeploymentsModalOpen(true);
+              }}
+              className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
+              title="Deployment History"
+            >
+              <History size={18} />
+            </button>
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
@@ -4764,43 +5142,285 @@ function CloudForgeEditor({
             <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-4xl h-[550px] flex flex-col overflow-hidden shadow-2xl">
               <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50">
                 <div className="flex items-center gap-2 text-slate-900 dark:text-zinc-100">
-                  <Code size={18} className="text-amber-500" />
-                  <h3 className="font-bold text-sm">
-                    Compiled Infrastructure Architecture
-                  </h3>
+                  {modalView === "code" ? (
+                    <>
+                      <Code size={18} className="text-amber-500" />
+                      <h3 className="font-bold text-sm">
+                        Compiled Infrastructure Architecture
+                      </h3>
+                    </>
+                  ) : (
+                    <>
+                      {terminalMode === "deploy" ? (
+                        <Terminal size={18} className="text-emerald-500 animate-pulse" />
+                      ) : (
+                        <Trash2 size={18} className="text-rose-500 animate-pulse" />
+                      )}
+                      <h3 className="font-bold text-sm font-mono">
+                        {terminalMode === "deploy" ? "Terraform Deployment Console" : "Terraform Destruction Console"}
+                      </h3>
+                    </>
+                  )}
                 </div>
                 <button
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={handleCloseModal}
                   className="text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800"
                 >
                   <X size={16} />
                 </button>
               </div>
-              <div className="flex-1 bg-slate-50 dark:bg-[#09090b] p-6 overflow-auto font-mono text-xs text-slate-800 dark:text-zinc-300 leading-relaxed">
-                <pre className="p-5 bg-white dark:bg-transparent rounded-xl shadow-sm dark:shadow-none border border-slate-200 dark:border-transparent overflow-x-auto selection:bg-amber-500/20">
-                  <code>{generatedCode}</code>
-                </pre>
-              </div>
-              <div className="p-4 border-t border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/30 flex justify-between items-center">
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 text-[11px] font-bold font-mono">
-                  <CheckCircle2 size={14} /> Schema mapped securely.
+              {modalView === "code" ? (
+                <div className="flex-1 bg-slate-50 dark:bg-[#09090b] p-6 overflow-auto font-mono text-xs text-slate-800 dark:text-zinc-300 leading-relaxed relative">
+                  <div className="relative group max-w-full">
+                    <pre className="p-5 pr-12 bg-white dark:bg-transparent rounded-xl shadow-sm dark:shadow-none border border-slate-200 dark:border-transparent overflow-x-auto selection:bg-amber-500/20">
+                      <code>{generatedCode}</code>
+                    </pre>
+                    <button
+                      onClick={copyCodeToClipboard}
+                      className="absolute top-3 right-3 p-2.5 rounded-xl bg-white/95 hover:bg-slate-50 dark:bg-zinc-900/95 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100 transition-all shadow-sm hover:shadow active:scale-95 z-10"
+                      title={isCopied ? "Copied" : "Copy Code"}
+                    >
+                      {isCopied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
+              ) : (
+                <div className="flex-1 bg-[#09090b] p-6 overflow-auto font-mono text-xs text-zinc-300 leading-relaxed flex flex-col justify-between">
+                  <div className="flex-1 overflow-y-auto max-h-[380px] bg-black/40 border border-zinc-800 rounded-xl p-4 custom-scrollbar">
+                    <pre className="whitespace-pre-wrap select-text font-mono text-[11px] text-zinc-300">
+                      {terminalLogs.join("")}
+                      {isDeploying && terminalLogs.length === 0 && (
+                        <span className="text-zinc-500 animate-pulse">
+                          {terminalMode === "deploy"
+                            ? "Initializing Terraform execution environment..."
+                            : "Initializing Terraform destruction environment..."}
+                        </span>
+                      )}
+                    </pre>
+                    <div ref={terminalEndRef} />
+                  </div>
+                  {awaitingInput && (
+                    <form onSubmit={sendTerminalInput} className="flex items-center gap-3 mt-4 border-t border-zinc-800/80 pt-4 font-mono text-xs text-amber-500">
+                      <span className="shrink-0 animate-pulse font-bold">$ Enter value:</span>
+                      <input
+                        type="text"
+                        value={terminalInput}
+                        onChange={(e) => setTerminalInput(e.target.value)}
+                        className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-zinc-100 flex-1 font-mono focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                        placeholder="type 'yes' and press Enter..."
+                        autoFocus
+                      />
+                      <button
+                        type="submit"
+                        className="px-5 h-9 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl font-bold transition-all shadow-md active:scale-95 shrink-0"
+                      >
+                        Submit
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+              {modalView === "code" ? (
+                <div className="p-4 border-t border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/30 flex justify-between items-center">
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 text-[11px] font-bold font-mono">
+                    <CheckCircle2 size={14} /> Schema mapped securely.
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleDeploy}
+                      className="flex items-center gap-1.5 px-4 h-10 text-xs font-bold rounded-xl transition-all border shadow-sm bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-300 dark:border-zinc-800"
+                    >
+                      <CloudLightning size={14} className="text-amber-500 animate-pulse" /> Deploy
+                    </button>
+                    <button
+                      onClick={downloadFile}
+                      className="flex items-center gap-1.5 px-5 h-10 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-md"
+                    >
+                      <Download size={14} /> Download File
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 border-t border-zinc-800 bg-zinc-900/30 flex justify-between items-center">
+                  <div className="flex items-center gap-2 text-zinc-400 text-[11px] font-mono">
+                    {isDeploying ? (
+                      <span className="flex items-center gap-2 text-amber-500 font-bold">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+                        {terminalMode === "deploy" ? "Running Terraform commands..." : "Tearing down infrastructure..."}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2 text-emerald-500 font-bold">
+                        <CheckCircle2 size={14} />
+                        Process exited.
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setModalView("code")}
+                      disabled={isDeploying}
+                      className="flex items-center gap-1.5 px-4 h-10 text-xs font-bold rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      <ArrowLeft size={14} /> Back to Code
+                    </button>
+                    <button
+                      onClick={handleCloseModal}
+                      className="flex items-center gap-1.5 px-5 h-10 text-xs font-bold rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 shadow-md"
+                    >
+                      Close Console
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* DEPLOYMENTS HISTORY MODAL */}
+        {isDeploymentsModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/40 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fade-in">
+            <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-6xl h-[650px] flex overflow-hidden shadow-2xl animate-scale-up">
+              
+              {/* Left Panel: List of Deployments */}
+              <div className="w-80 shrink-0 border-r border-slate-200 dark:border-zinc-800 flex flex-col bg-slate-50 dark:bg-zinc-900/30">
+                <div className="h-16 shrink-0 px-4 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 flex justify-between items-center">
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+                    <History size={16} className="text-amber-500" /> Deployments History
+                  </h3>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2 custom-scrollbar">
+                  {deployments.length === 0 ? (
+                    <div className="text-center text-xs text-slate-400 dark:text-zinc-500 mt-8 font-medium">
+                      No deployments recorded yet.
+                    </div>
+                  ) : (
+                    deployments.map((dep, idx) => {
+                      const isLatest = dep.id === latestDeploymentId;
+                      const isSelected = selectedDeployment?.id === dep.id;
+                      const formattedDate = new Date(dep.timestamp).toLocaleString();
+                      
+                      return (
+                        <button
+                          key={dep.id}
+                          onClick={() => setSelectedDeployment(dep)}
+                          className={`w-full text-left p-3.5 rounded-xl border transition-all flex flex-col gap-1.5 group select-none ${
+                            isSelected
+                              ? "bg-amber-100/50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30"
+                              : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-850 hover:border-slate-300 dark:hover:border-zinc-750"
+                          }`}
+                        >
+                          <div className="flex justify-between items-center w-full">
+                            <span className={`text-[11px] font-bold font-mono tracking-wide ${
+                              isSelected ? "text-amber-700 dark:text-amber-500" : "text-slate-600 dark:text-zinc-400"
+                            }`}>
+                              Deploy #{deployments.length - idx}
+                            </span>
+                            {isLatest && hasDeployment && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/20">
+                                Active Live
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="text-xs text-slate-400 dark:text-zinc-500 flex items-center gap-1">
+                            <Clock size={11} /> {formattedDate}
+                          </div>
+
+                          {isLatest && hasDeployment && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsDeploymentsModalOpen(false);
+                                handleDestroy();
+                              }}
+                              className="mt-2 w-full flex items-center justify-center gap-1.5 h-8 text-[11px] font-bold rounded-lg transition-all border border-rose-200 hover:bg-rose-50 text-rose-600 dark:border-rose-900/50 dark:hover:bg-rose-950/30 dark:text-rose-400"
+                            >
+                              <Trash2 size={12} /> Destroy Infrastructure
+                            </button>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="p-4 border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-center">
                   <button
-                    onClick={copyCodeToClipboard}
-                    className={`flex items-center gap-1.5 px-4 h-10 text-xs font-bold rounded-xl transition-all border shadow-sm ${isCopied ? "bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 border-amber-200 dark:border-amber-500/20" : "bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-300 dark:border-zinc-800"}`}
+                    onClick={handleClearHistory}
+                    disabled={deployments.length === 0}
+                    className="w-full h-9 text-xs font-bold rounded-xl border border-rose-200 hover:bg-rose-50 dark:border-rose-900/40 dark:hover:bg-rose-950/20 text-rose-600 dark:text-rose-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                   >
-                    {isCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
-                    {isCopied ? "Copied" : "Copy Code"}
-                  </button>
-                  <button
-                    onClick={downloadFile}
-                    className="flex items-center gap-1.5 px-5 h-10 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-md"
-                  >
-                    <Download size={14} /> Download File
+                    <Trash2 size={13} /> Clear History
                   </button>
                 </div>
               </div>
+
+              {/* Right Panel: Deployment Details / Code View */}
+              <div className="flex-1 min-w-0 flex flex-col bg-white dark:bg-zinc-950">
+                <div className="h-16 shrink-0 px-4 border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 flex justify-between items-center">
+                  <div>
+                    {selectedDeployment ? (
+                      <>
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-zinc-100">
+                          Deployment Configuration
+                        </h4>
+                        <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono mt-0.5">
+                          ID: {selectedDeployment.id}
+                        </p>
+                      </>
+                    ) : (
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-zinc-100">
+                        Deployment Details
+                      </h4>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {selectedDeployment && (
+                      <button
+                        onClick={() => handleRedeploy(selectedDeployment.id)}
+                        className="flex items-center gap-1.5 px-4 h-9 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-md transition-all active:scale-95"
+                      >
+                        <CloudLightning size={13} className="animate-pulse" /> Deploy This Version
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setIsDeploymentsModalOpen(false);
+                        setSelectedDeployment(null);
+                      }}
+                      className="text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+                      title="Close History"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                {selectedDeployment ? (
+                  <div className="flex-1 p-6 overflow-auto bg-slate-50 dark:bg-[#09090b] font-mono text-xs text-slate-800 dark:text-zinc-300 leading-relaxed relative">
+                    <div className="relative group max-w-full">
+                      <pre className="p-5 pr-12 bg-white dark:bg-transparent rounded-xl shadow-sm dark:shadow-none border border-slate-200 dark:border-transparent overflow-x-auto selection:bg-amber-500/20">
+                        <code>{JSON.stringify(selectedDeployment.code, null, 2)}</code>
+                      </pre>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(JSON.stringify(selectedDeployment.code, null, 2));
+                          addLog("📋 Configuration copied.", "success");
+                        }}
+                        className="absolute top-3 right-3 p-2.5 rounded-xl bg-white/95 hover:bg-slate-50 dark:bg-zinc-900/95 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100 transition-all shadow-sm hover:shadow active:scale-95 z-10"
+                        title="Copy Configuration"
+                      >
+                        <Copy size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-slate-400 dark:text-zinc-600 gap-3">
+                    <History size={48} className="stroke-[1.5]" />
+                    <p className="text-sm font-medium">Select a deployment from the history panel to view details</p>
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
         )}
