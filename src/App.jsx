@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
 import {
   ReactFlow,
   Background,
@@ -65,6 +65,8 @@ import {
   Upload,
   Server,
   History,
+  Cpu,
+  ArrowUpRight,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
@@ -214,65 +216,65 @@ const REGIONAL_MULTIPLIERS = {
 };
 
 const OS_IMAGES = [
-  { 
-    id: "amazon-linux-2023", 
-    name: "Amazon Linux 2023 (AL2023)", 
-    platform: "Linux", 
-    defaultAmis: { 
-      "us-east-1": "ami-04b70fa74e45c3917", 
-      "us-east-2": "ami-05d389e10743b881a", 
-      "us-west-1": "ami-038b90a07d27e85c7", 
-      "us-west-2": "ami-03d5c48b0a1d9cad5", 
-      "ap-south-1": "ami-022d03f649d12a49d" 
-    } 
+  {
+    id: "amazon-linux-2023",
+    name: "Amazon Linux 2023 (AL2023)",
+    platform: "Linux",
+    defaultAmis: {
+      "us-east-1": "ami-04b70fa74e45c3917",
+      "us-east-2": "ami-05d389e10743b881a",
+      "us-west-1": "ami-038b90a07d27e85c7",
+      "us-west-2": "ami-03d5c48b0a1d9cad5",
+      "ap-south-1": "ami-022d03f649d12a49d"
+    }
   },
-  { 
-    id: "ubuntu-24", 
-    name: "Ubuntu Server 24.04 LTS", 
-    platform: "Linux", 
-    defaultAmis: { 
-      "us-east-1": "ami-04a81a99f5ec58529", 
-      "us-east-2": "ami-0904037de8501fd90", 
-      "us-west-1": "ami-053a45df0a698bc08", 
-      "us-west-2": "ami-0606dd43116f5ed57", 
-      "ap-south-1": "ami-0f5ee92e2d63afc18" 
-    } 
+  {
+    id: "ubuntu-24",
+    name: "Ubuntu Server 24.04 LTS",
+    platform: "Linux",
+    defaultAmis: {
+      "us-east-1": "ami-04a81a99f5ec58529",
+      "us-east-2": "ami-0904037de8501fd90",
+      "us-west-1": "ami-053a45df0a698bc08",
+      "us-west-2": "ami-0606dd43116f5ed57",
+      "ap-south-1": "ami-0f5ee92e2d63afc18"
+    }
   },
-  { 
-    id: "windows-2022", 
-    name: "Windows Server 2022 Base", 
-    platform: "Windows", 
-    defaultAmis: { 
-      "us-east-1": "ami-03c62377d6118544d", 
-      "us-east-2": "ami-0d65b161df27f8a70", 
-      "us-west-1": "ami-0b92db2d713c7bc37", 
-      "us-west-2": "ami-07971b3e150965e64", 
-      "ap-south-1": "ami-07d0f779774640108" 
-    } 
+  {
+    id: "windows-2022",
+    name: "Windows Server 2022 Base",
+    platform: "Windows",
+    defaultAmis: {
+      "us-east-1": "ami-03c62377d6118544d",
+      "us-east-2": "ami-0d65b161df27f8a70",
+      "us-west-1": "ami-0b92db2d713c7bc37",
+      "us-west-2": "ami-07971b3e150965e64",
+      "ap-south-1": "ami-07d0f779774640108"
+    }
   },
-  { 
-    id: "rhel-9", 
-    name: "Red Hat Enterprise Linux 9", 
-    platform: "RHEL", 
-    defaultAmis: { 
-      "us-east-1": "ami-0583d8c7a9c35d7a9", 
-      "us-east-2": "ami-0f2c00a6e76cfb1ef", 
-      "us-west-1": "ami-054965c6cd7c6e4c9", 
-      "us-west-2": "ami-03c004c27a20c3a2f", 
-      "ap-south-1": "ami-0e1d062fe401e4046" 
-    } 
+  {
+    id: "rhel-9",
+    name: "Red Hat Enterprise Linux 9",
+    platform: "RHEL",
+    defaultAmis: {
+      "us-east-1": "ami-0583d8c7a9c35d7a9",
+      "us-east-2": "ami-0f2c00a6e76cfb1ef",
+      "us-west-1": "ami-054965c6cd7c6e4c9",
+      "us-west-2": "ami-03c004c27a20c3a2f",
+      "ap-south-1": "ami-0e1d062fe401e4046"
+    }
   },
-  { 
-    id: "suse-15", 
-    name: "SUSE Linux Enterprise Server 15", 
-    platform: "SUSE", 
-    defaultAmis: { 
-      "us-east-1": "ami-0db2fb6d43522f7b8", 
-      "us-east-2": "ami-04e4c360b37dc1d7c", 
-      "us-west-1": "ami-01d89955faad0061e", 
-      "us-west-2": "ami-09cf8f1b63574c8bc", 
-      "ap-south-1": "ami-03b879ec352a979dd" 
-    } 
+  {
+    id: "suse-15",
+    name: "SUSE Linux Enterprise Server 15",
+    platform: "SUSE",
+    defaultAmis: {
+      "us-east-1": "ami-0db2fb6d43522f7b8",
+      "us-east-2": "ami-04e4c360b37dc1d7c",
+      "us-west-1": "ami-01d89955faad0061e",
+      "us-west-2": "ami-09cf8f1b63574c8bc",
+      "ap-south-1": "ami-03b879ec352a979dd"
+    }
   }
 ];
 
@@ -364,7 +366,7 @@ const RegionSelect = ({ value, onChange, className }) => {
     if (!isCustomMode) return;
     const nextVal = e.target.value;
     setSearch(nextVal);
-    
+
     const typed = nextVal.trim().toLowerCase();
     if (!typed) {
       setIsInvalid(false);
@@ -396,11 +398,10 @@ const RegionSelect = ({ value, onChange, className }) => {
           onKeyDown={handleKeyDown}
           readOnly={!isCustomMode}
           placeholder="Select or enter region..."
-          className={`${className} ${
-            isInvalid
-              ? "border-rose-500 focus:border-rose-500 dark:border-rose-500 focus:ring-1 focus:ring-rose-500"
-              : "focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-          } ${!isCustomMode ? "cursor-pointer select-none" : ""} pr-10`}
+          className={`${className} ${isInvalid
+            ? "border-rose-500 focus:border-rose-500 dark:border-rose-500 focus:ring-1 focus:ring-rose-500"
+            : "focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+            } ${!isCustomMode ? "cursor-pointer select-none" : ""} pr-10`}
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none text-slate-400 dark:text-zinc-500">
           <ChevronDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -423,11 +424,10 @@ const RegionSelect = ({ value, onChange, className }) => {
                 onChange(opt.value);
                 setIsOpen(false);
               }}
-              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                !isCustomMode && value === opt.value
-                  ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 font-bold"
-                  : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"
-              }`}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors ${!isCustomMode && value === opt.value
+                ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 font-bold"
+                : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"
+                }`}
             >
               {opt.label}
             </button>
@@ -445,11 +445,10 @@ const RegionSelect = ({ value, onChange, className }) => {
                 if (inputEl) inputEl.focus();
               }, 50);
             }}
-            className={`w-full text-left px-3 py-2 text-sm transition-colors border-t border-slate-100 dark:border-zinc-800/80 font-bold ${
-              isCustomMode
-                ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500"
-                : "text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-700 dark:hover:text-white"
-            }`}
+            className={`w-full text-left px-3 py-2 text-sm transition-colors border-t border-slate-100 dark:border-zinc-800/80 font-bold ${isCustomMode
+              ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500"
+              : "text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-700 dark:hover:text-white"
+              }`}
           >
             Custom Region...
           </button>
@@ -512,12 +511,18 @@ const ZoomedOutOverlay = ({ type, name, colorClass = "bg-amber-500", borderClass
 
   if (!isZoomedOut) return null;
 
+  const textColorClass = colorClass
+    .replace("bg-amber-500", "text-amber-600 dark:text-amber-400")
+    .replace("bg-sky-500", "text-sky-600 dark:text-sky-400")
+    .replace("bg-violet-500", "text-violet-600 dark:text-violet-400")
+    .replace("bg-blue-500", "text-blue-600 dark:text-blue-450");
+
   if (isCard) {
     return (
       <div
-        className={`absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-zinc-950 border border-dashed ${borderClass} z-50 pointer-events-none select-none text-center rounded-xl p-2.5 animate-fade-in`}
+        className={`absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-white dark:bg-zinc-950 border border-dashed ${borderClass} z-50 pointer-events-none select-none text-center rounded-xl p-2.5 animate-fade-in`}
       >
-        <span className={`text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded text-white ${colorClass} mb-1.5 shrink-0 shadow-sm`}>
+        <span className={`text-[14px] font-black uppercase tracking-widest ${textColorClass} shrink-0`}>
           {type}
         </span>
         <span className="text-slate-900 dark:text-zinc-100 font-extrabold text-[15px] leading-tight truncate w-full px-1.5 shrink-0">
@@ -529,11 +534,10 @@ const ZoomedOutOverlay = ({ type, name, colorClass = "bg-amber-500", borderClass
 
   return (
     <div
-      className={`absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-zinc-950 border-4 border-dashed ${borderClass} z-50 pointer-events-none select-none text-center p-5 transition-all duration-300 ${
-        circle ? "rounded-full" : "rounded-3xl"
-      }`}
+      className={`absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-zinc-950 border-4 border-dashed ${borderClass} z-50 pointer-events-none select-none text-center p-5 transition-all duration-300 ${circle ? "rounded-full" : "rounded-3xl"
+        } gap-1`}
     >
-      <span className={`text-[18px] font-black uppercase tracking-widest px-4 py-1.5 rounded text-white ${colorClass} mb-3 shadow-lg shrink-0`}>
+      <span className={`text-[22px] font-black uppercase tracking-widest ${textColorClass} shrink-0`}>
         {type}
       </span>
       <span className="text-slate-900 dark:text-zinc-100 font-black text-[26px] tracking-wide leading-tight line-clamp-3 max-w-full px-3 shrink-0">
@@ -558,7 +562,7 @@ const S3Node = ({ id, data, selected }) => {
     setNodes((nds) => {
       const remainingChildren = nds.filter((n) => n.parentId === id && n.id !== childId);
       const newChildrenCount = remainingChildren.length;
-      
+
       const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
       const newWidth = newChildrenCount > 1 ? 500 : 300;
 
@@ -655,9 +659,8 @@ const S3Node = ({ id, data, selected }) => {
                   e.stopPropagation();
                   setIsListOpen(!isListOpen);
                 }}
-                className={`p-1 rounded text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all ${
-                  isListOpen ? "bg-amber-100 dark:bg-amber-500/30" : ""
-                }`}
+                className={`p-1 rounded text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all ${isListOpen ? "bg-amber-100 dark:bg-amber-500/30" : ""
+                  }`}
                 title="Toggle Snap List"
               >
                 <Layers size={11} />
@@ -983,7 +986,7 @@ const IAMGroupNode = ({ id, data, selected }) => {
     setNodes((nds) => {
       const remainingChildren = nds.filter((n) => n.parentId === id && n.id !== childId);
       const newChildrenCount = remainingChildren.length;
-      
+
       const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
       const newWidth = newChildrenCount > 1 ? 500 : 300;
 
@@ -1075,9 +1078,8 @@ const IAMGroupNode = ({ id, data, selected }) => {
                   e.stopPropagation();
                   setIsListOpen(!isListOpen);
                 }}
-                className={`p-1 rounded text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/20 transition-all ${
-                  isListOpen ? "bg-violet-100 dark:bg-violet-500/30" : ""
-                }`}
+                className={`p-1 rounded text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/20 transition-all ${isListOpen ? "bg-violet-100 dark:bg-violet-500/30" : ""
+                  }`}
                 title="Toggle Group Members List"
               >
                 <Layers size={11} />
@@ -1213,7 +1215,7 @@ const EC2Node = ({ data }) => {
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="p-2 bg-sky-50 dark:bg-sky-500/10 rounded-lg text-sky-600 dark:text-sky-500 border border-sky-100 dark:border-sky-500/20 shadow-inner shrink-0">
-            <Server size={16} />
+            <Cpu size={16} />
           </div>
           <div className="flex flex-col min-w-0">
             <h4 className="text-slate-800 dark:text-zinc-100 font-bold text-sm leading-tight tracking-wide truncate">
@@ -1446,6 +1448,264 @@ const WelcomeScreen = ({ projects, onCreateProject, onLoadProject }) => {
   );
 };
 
+const reconstructCanvasFromCode = (code) => {
+  const nodes = [];
+  const edges = [];
+  
+  if (!code || !code.resource) return { nodes, edges };
+  
+  const resources = code.resource;
+  
+  // Maps to help resolve connections by name/id
+  const nameToNodeId = {};
+  const arnToNodeId = {};
+  
+  let gridX = 100;
+  let gridY = 100;
+  const getNextPosition = () => {
+    const pos = { x: gridX, y: gridY };
+    gridX += 280;
+    if (gridX > 900) {
+      gridX = 100;
+      gridY += 240;
+    }
+    return pos;
+  };
+
+  // 1. Reconstruct S3 Buckets
+  if (resources.aws_s3_bucket) {
+    Object.entries(resources.aws_s3_bucket).forEach(([tfId, config]) => {
+      const bucketName = config.bucket || tfId;
+      const nodeId = `s3_${tfId}`;
+      nameToNodeId[bucketName] = nodeId;
+      
+      let versioning = false;
+      if (resources.aws_s3_bucket_versioning) {
+        const vConfig = Object.values(resources.aws_s3_bucket_versioning).find(
+          (v) => v.bucket === `\${aws_s3_bucket.${tfId}.id}` || v.bucket === bucketName
+        );
+        if (vConfig?.versioning_configuration?.status === "Enabled") {
+          versioning = true;
+        }
+      }
+      
+      let isPublic = true;
+      if (resources.aws_s3_bucket_public_access_block) {
+        const pConfig = Object.values(resources.aws_s3_bucket_public_access_block).find(
+          (p) => p.bucket === `\${aws_s3_bucket.${tfId}.id}` || p.bucket === bucketName
+        );
+        if (pConfig?.block_public_acls === true) {
+          isPublic = false;
+        }
+      }
+
+      nodes.push({
+        id: nodeId,
+        type: "s3Node",
+        position: getNextPosition(),
+        style: { width: 300, height: 200 },
+        data: {
+          label: bucketName,
+          versioning,
+          isPublic,
+          cost: 0.23
+        }
+      });
+    });
+  }
+
+  // 2. Reconstruct IAM Groups
+  if (resources.aws_iam_group) {
+    Object.entries(resources.aws_iam_group).forEach(([tfId, config]) => {
+      const groupName = config.name || tfId;
+      const nodeId = `iam_group_${tfId}`;
+      nameToNodeId[groupName] = nodeId;
+      nodes.push({
+        id: nodeId,
+        type: "iamGroupNode",
+        position: getNextPosition(),
+        style: { width: 300, height: 200 },
+        data: {
+          label: groupName,
+          iamType: "Group"
+        }
+      });
+    });
+  }
+
+  // 3. Reconstruct IAM Users
+  if (resources.aws_iam_user) {
+    Object.entries(resources.aws_iam_user).forEach(([tfId, config]) => {
+      const userName = config.name || tfId;
+      const nodeId = `iam_user_${tfId}`;
+      nameToNodeId[userName] = nodeId;
+      nodes.push({
+        id: nodeId,
+        type: "iamNode",
+        position: getNextPosition(),
+        data: {
+          label: userName,
+          iamType: "User"
+        }
+      });
+    });
+  }
+
+  // 4. Reconstruct IAM Roles
+  if (resources.aws_iam_role) {
+    Object.entries(resources.aws_iam_role).forEach(([tfId, config]) => {
+      const roleName = config.name || tfId;
+      const nodeId = `iam_role_${tfId}`;
+      nameToNodeId[roleName] = nodeId;
+      nodes.push({
+        id: nodeId,
+        type: "iamNode",
+        position: getNextPosition(),
+        data: {
+          label: roleName,
+          iamType: "Role"
+        }
+      });
+    });
+  }
+
+  // 5. Reconstruct IAM Policies
+  if (resources.aws_iam_policy) {
+    Object.entries(resources.aws_iam_policy).forEach(([tfId, config]) => {
+      const policyName = config.name || tfId;
+      const nodeId = `iam_policy_${tfId}`;
+      nameToNodeId[policyName] = nodeId;
+      arnToNodeId[`\${aws_iam_policy.${tfId}.arn}`] = nodeId;
+      nodes.push({
+        id: nodeId,
+        type: "iamNode",
+        position: getNextPosition(),
+        data: {
+          label: policyName,
+          iamType: "Policy"
+        }
+      });
+    });
+  }
+
+  // 6. Reconstruct EC2 Instances
+  if (resources.aws_instance) {
+    Object.entries(resources.aws_instance).forEach(([tfId, config]) => {
+      const instanceName = config.tags?.Name || tfId;
+      const nodeId = `ec2_${tfId}`;
+      nameToNodeId[instanceName] = nodeId;
+      nodes.push({
+        id: nodeId,
+        type: "ec2Node",
+        position: getNextPosition(),
+        data: {
+          label: instanceName,
+          instanceType: config.instance_type || "t2.micro",
+          ami: config.ami || "",
+          volumeSize: config.root_block_device?.volume_size || 8,
+          cost: 8.50
+        }
+      });
+    });
+  }
+
+  // 7. Reconstruct Group Memberships (Edges)
+  if (resources.aws_iam_user_group_membership) {
+    Object.values(resources.aws_iam_user_group_membership).forEach((config) => {
+      const user = config.user;
+      const groups = config.groups || [];
+      
+      const cleanUser = user.replace(/\${aws_iam_user\.(.+)\.name}/, '$1');
+      const userNodeId = nameToNodeId[cleanUser] || Object.values(nameToNodeId).find((id) => id.includes(cleanUser));
+
+      groups.forEach((group) => {
+        const cleanGroup = group.replace(/\${aws_iam_group\.(.+)\.name}/, '$1');
+        const groupNodeId = nameToNodeId[cleanGroup] || Object.values(nameToNodeId).find((id) => id.includes(cleanGroup));
+        
+        if (userNodeId && groupNodeId) {
+          edges.push({
+            id: `e_mem_${userNodeId}_${groupNodeId}`,
+            source: userNodeId,
+            target: groupNodeId,
+            sourceHandle: "right",
+            targetHandle: "left",
+            style: { strokeWidth: 2, stroke: "#94a3b8" }
+          });
+        }
+      });
+    });
+  }
+
+  // 8. Reconstruct Policy Attachments (Edges)
+  if (resources.aws_iam_user_policy_attachment) {
+    Object.values(resources.aws_iam_user_policy_attachment).forEach((config) => {
+      const user = config.user;
+      const policyArn = config.policy_arn;
+      
+      const cleanUser = user.replace(/\${aws_iam_user\.(.+)\.name}/, '$1');
+      const userNodeId = nameToNodeId[cleanUser] || Object.values(nameToNodeId).find((id) => id.includes(cleanUser));
+      const policyNodeId = arnToNodeId[policyArn] || Object.values(arnToNodeId).find((id) => id.includes(policyArn));
+      
+      if (userNodeId && policyNodeId) {
+        edges.push({
+          id: `e_pat_${userNodeId}_${policyNodeId}`,
+          source: userNodeId,
+          target: policyNodeId,
+          sourceHandle: "right",
+          targetHandle: "left",
+          style: { strokeWidth: 2, stroke: "#94a3b8" }
+        });
+      }
+    });
+  }
+  
+  if (resources.aws_iam_group_policy_attachment) {
+    Object.values(resources.aws_iam_group_policy_attachment).forEach((config) => {
+      const group = config.group;
+      const policyArn = config.policy_arn;
+      
+      const cleanGroup = group.replace(/\${aws_iam_group\.(.+)\.name}/, '$1');
+      const groupNodeId = nameToNodeId[cleanGroup] || Object.values(nameToNodeId).find((id) => id.includes(cleanGroup));
+      const policyNodeId = arnToNodeId[policyArn] || Object.values(arnToNodeId).find((id) => id.includes(policyArn));
+      
+      if (groupNodeId && policyNodeId) {
+        edges.push({
+          id: `e_pat_${groupNodeId}_${policyNodeId}`,
+          source: groupNodeId,
+          target: policyNodeId,
+          sourceHandle: "right",
+          targetHandle: "left",
+          style: { strokeWidth: 2, stroke: "#94a3b8" }
+        });
+      }
+    });
+  }
+
+  if (resources.aws_iam_role_policy_attachment) {
+    Object.values(resources.aws_iam_role_policy_attachment).forEach((config) => {
+      const role = config.role;
+      const policyArn = config.policy_arn;
+      
+      const cleanRole = role.replace(/\${aws_iam_role\.(.+)\.name}/, '$1');
+      const roleNodeId = nameToNodeId[cleanRole] || Object.values(nameToNodeId).find((id) => id.includes(cleanRole));
+      const policyNodeId = arnToNodeId[policyArn] || Object.values(arnToNodeId).find((id) => id.includes(policyArn));
+      
+      if (roleNodeId && policyNodeId) {
+        edges.push({
+          id: `e_pat_${roleNodeId}_${policyNodeId}`,
+          source: roleNodeId,
+          target: policyNodeId,
+          sourceHandle: "right",
+          targetHandle: "left",
+          style: { strokeWidth: 2, stroke: "#94a3b8" }
+        });
+      }
+    });
+  }
+
+  return { nodes, edges };
+};
+
 // ==========================================
 // 3. MAIN APP: The Floating Editor
 // ==========================================
@@ -1494,7 +1754,7 @@ function CloudForgeEditor({
             if (parentGroupNode) {
               const remainingChildren = nextNodes.filter((n) => n.parentId === parentId);
               const newChildrenCount = remainingChildren.length;
-              
+
               const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
               const newWidth = newChildrenCount > 1 ? 500 : 300;
 
@@ -1636,6 +1896,22 @@ function CloudForgeEditor({
   const [userCollapsedLegend, setUserCollapsedLegend] = useState(false);
   const [isAuditLegendCollapsed, setIsAuditLegendCollapsed] = useState(true);
 
+  const [budgetSearch, setBudgetSearch] = useState("");
+  const [budgetCategory, setBudgetCategory] = useState("all");
+  const [expandedBudgetNodes, setExpandedBudgetNodes] = useState(new Set());
+
+  const toggleBudgetNode = (nodeId) => {
+    setExpandedBudgetNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
+  };
+
   const [past, setPast] = useState([]);
   const [future, setFuture] = useState([]);
 
@@ -1719,7 +1995,7 @@ function CloudForgeEditor({
   const [fsFolders, setFsFolders] = useState([]);
   const [fsFiles, setFsFiles] = useState([]);
   const [fsSelectedItem, setFsSelectedItem] = useState(null);
-  const [fsOnSelect, setFsOnSelect] = useState(() => () => {});
+  const [fsOnSelect, setFsOnSelect] = useState(() => () => { });
 
   const openFsBrowser = async (initialPath, onSelectCallback) => {
     setFsSelectedItem(null);
@@ -1824,7 +2100,7 @@ function CloudForgeEditor({
       if (node.type === "s3Node") {
         const children = nodes.filter((c) => c.type === "s3ObjectNode" && c.parentId === node.id);
         const childrenWithPaths = children.filter((c) => c.data?.sourcePath);
-        
+
         if (childrenWithPaths.length > 0) {
           const totalSizeGB = childrenWithPaths.reduce((sum, child) => sum + (child.data?.sizeGB || 0), 0);
           const storageGB = parseFloat(totalSizeGB.toFixed(3));
@@ -1895,7 +2171,7 @@ function CloudForgeEditor({
             const platform = node.data?.platform || "Linux";
             const instType = node.data?.instanceType || "t2.micro";
             const volSize = node.data?.volumeSize || 8;
-            
+
             const newCost = calculateEC2Cost(instType, volSize, region, platform, db, true);
             if (newCost !== node.data?.cost) {
               return {
@@ -2100,19 +2376,49 @@ function CloudForgeEditor({
     }
 
     if (newNode) {
+      let targetHandleOnNew = "top";
+      const fromNode = nodes.find((n) => n.id === fromNodeId);
+      if (fromNode) {
+        const fromCenterX = fromNode.position.x + (fromNode.style?.width ? fromNode.style.width / 2 : 110);
+        const fromCenterY = fromNode.position.y + (fromNode.style?.height ? fromNode.style.height / 2 : 40);
+        
+        let newWidth = 220;
+        let newHeight = 80;
+        if (nodeType === "s3Node" || nodeType === "iamGroupNode" || (nodeType === "iamNode" && labelType === "Group")) {
+          newWidth = 300;
+          newHeight = 200;
+        } else if (nodeType === "shapeNode") {
+          const isContainer = labelType === "Rectangle" || labelType === "Circle";
+          newWidth = isContainer ? 350 : 120;
+          newHeight = isContainer ? 350 : 40;
+        }
+        
+        const newCenterX = centeredPosition.x + newWidth / 2;
+        const newCenterY = centeredPosition.y + newHeight / 2;
+        
+        const dx = fromCenterX - newCenterX;
+        const dy = fromCenterY - newCenterY;
+        
+        if (Math.abs(dx) > Math.abs(dy)) {
+          targetHandleOnNew = dx > 0 ? "right" : "left";
+        } else {
+          targetHandleOnNew = dy > 0 ? "bottom" : "top";
+        }
+      }
+
       const newEdge = {
         id: `e_${Date.now()}`,
         source: fromHandleType === "source" ? fromNodeId : newNodeId,
         target: fromHandleType === "source" ? newNodeId : fromNodeId,
-        sourceHandle: fromHandleType === "source" ? fromHandleId : "bottom",
-        targetHandle: fromHandleType === "source" ? "top" : fromHandleId,
+        sourceHandle: fromHandleType === "source" ? fromHandleId : targetHandleOnNew,
+        targetHandle: fromHandleType === "source" ? targetHandleOnNew : fromHandleId,
         style: { strokeWidth: 2, stroke: "#94a3b8" },
       };
 
       setNodes((nds) => nds.concat(newNode));
       setEdges((eds) => eds.concat(newEdge));
     }
-  }, [floatingConnectionSearch, setNodes, setEdges, takeSnapshot, addLog, userSettings.defaultRegion]);
+  }, [floatingConnectionSearch, setNodes, setEdges, takeSnapshot, addLog, userSettings.defaultRegion, nodes]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -2416,6 +2722,35 @@ function CloudForgeEditor({
     return () => window.removeEventListener("keydown", handleGlobalEscape);
   }, []);
 
+  const contextMenuRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (contextMenu && contextMenuRef.current) {
+      const menuEl = contextMenuRef.current;
+      const rect = menuEl.getBoundingClientRect();
+      
+      let x = contextMenu.x;
+      let y = contextMenu.y;
+
+      if (x + rect.width > window.innerWidth) {
+        x = window.innerWidth - rect.width - 10;
+      }
+      if (x < 10) {
+        x = 10;
+      }
+
+      if (y + rect.height > window.innerHeight) {
+        y = window.innerHeight - rect.height - 10;
+      }
+      if (y < 10) {
+        y = 10;
+      }
+
+      menuEl.style.left = `${x}px`;
+      menuEl.style.top = `${y}px`;
+    }
+  }, [contextMenu]);
+
   const onNodeContextMenu = useCallback((event, node) => {
     event.preventDefault();
     setContextMenu({
@@ -2462,7 +2797,7 @@ function CloudForgeEditor({
         if (parentId) {
           const remainingChildren = nextNodesFiltered.filter((n) => n.parentId === parentId);
           const newChildrenCount = remainingChildren.length;
-          
+
           const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
           const newWidth = newChildrenCount > 1 ? 500 : 300;
 
@@ -2547,7 +2882,7 @@ function CloudForgeEditor({
             const currentInstanceType = field === "instanceType" ? value : (node.data.instanceType || "t2.micro");
             const currentVolumeSize = field === "volumeSize" ? value : (node.data.volumeSize || 8);
             const currentRegion = field === "region" ? value : (node.data.region || "us-east-1");
-            
+
             // Resolve OS Image & Platform
             let currentOsImage = field === "osImage" ? value : (node.data.osImage || "amazon-linux-2023");
             const activeOs = OS_IMAGES.find(img => img.id === currentOsImage) || OS_IMAGES[0];
@@ -2557,7 +2892,7 @@ function CloudForgeEditor({
             // Handle custom vs standard AMI ID updates
             const currentUseCustomAmi = field === "useCustomAmi" ? value : !!node.data.useCustomAmi;
             let currentAmi = node.data.ami || "ami-04b70fa74e45c3917";
-            
+
             if (!currentUseCustomAmi) {
               currentAmi = activeOs.defaultAmis[currentRegion.toLowerCase()] || activeOs.defaultAmis["us-east-1"] || "ami-04b70fa74e45c3917";
               updatedData.ami = currentAmi;
@@ -3063,6 +3398,7 @@ function CloudForgeEditor({
               source: e.source,
               target: e.target,
             })),
+          canvasState: { nodes, edges },
         }),
       });
       if (!response.ok) throw new Error(`Server status ${response.status}`);
@@ -3179,13 +3515,13 @@ function CloudForgeEditor({
       if (response.ok) {
         // Close deployments modal and open compilation modal
         setIsDeploymentsModalOpen(false);
-        
+
         // Retrieve the deployment details to set generatedCode so it is shown in Code tab if they navigate back
         const depItem = deployments.find(d => d.id === deploymentId);
         if (depItem) {
           setGeneratedCode(JSON.stringify(depItem.code, null, 2));
         }
-        
+
         setIsModalOpen(true);
         handleDeploy(); // Start the deployment stream terminal
       } else {
@@ -3530,8 +3866,8 @@ function CloudForgeEditor({
                           handleFocusNode(res.id);
                         }}
                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm font-medium transition-colors ${index === searchActiveIndex
-                            ? "bg-slate-100 dark:bg-zinc-800 text-slate-900 dark:text-white font-bold"
-                            : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"
+                          ? "bg-slate-100 dark:bg-zinc-800 text-slate-900 dark:text-white font-bold"
+                          : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"
                           }`}
                       >
                         {res.type === "s3Node" ? (
@@ -3550,7 +3886,7 @@ function CloudForgeEditor({
                             className="text-violet-500 shrink-0"
                           />
                         ) : res.type === "ec2Node" ? (
-                          <Server
+                          <Cpu
                             size={16}
                             className="text-sky-500 shrink-0"
                           />
@@ -3708,7 +4044,7 @@ function CloudForgeEditor({
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-sky-100 dark:bg-sky-500/10 group-hover:bg-sky-200 dark:group-hover:bg-sky-500/20 rounded-md text-sky-600 dark:text-sky-500 border border-sky-200 dark:border-sky-500/20 transition-all">
-                        <Server size={14} />
+                        <Cpu size={14} />
                       </div>
                       <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
                         EC2 Instance
@@ -4172,7 +4508,7 @@ function CloudForgeEditor({
                         <div className="flex justify-between items-center text-xs font-bold text-emerald-700 dark:text-emerald-400">
                           <span>Auto-calculated:</span>
                           <span className="font-mono bg-emerald-100 dark:bg-emerald-500/10 px-2 py-0.5 rounded">
-                            {selectedNode.data?.storageGB >= 1 
+                            {selectedNode.data?.storageGB >= 1
                               ? `${(selectedNode.data?.storageGB).toFixed(3)} GB`
                               : `${(selectedNode.data?.storageGB * 1024).toFixed(1)} MB`}
                           </span>
@@ -4195,7 +4531,7 @@ function CloudForgeEditor({
                           max="1000"
                           value={selectedNode.data?.storageGB || 10}
                           onChange={(e) =>
-                             updateNodeData("storageGB", parseInt(e.target.value))
+                            updateNodeData("storageGB", parseInt(e.target.value))
                           }
                           className="w-full h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
                         />
@@ -4298,22 +4634,20 @@ function CloudForgeEditor({
                       <button
                         type="button"
                         onClick={() => updateNodeData("sourceType", "file")}
-                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${
-                          (selectedNode.data?.sourceType || "file") === "file"
-                            ? "bg-white dark:bg-zinc-850 text-amber-500 shadow-sm"
-                            : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
-                        }`}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${(selectedNode.data?.sourceType || "file") === "file"
+                          ? "bg-white dark:bg-zinc-850 text-amber-500 shadow-sm"
+                          : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
+                          }`}
                       >
                         File
                       </button>
                       <button
                         type="button"
                         onClick={() => updateNodeData("sourceType", "folder")}
-                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${
-                          selectedNode.data?.sourceType === "folder"
-                            ? "bg-white dark:bg-zinc-850 text-amber-500 shadow-sm"
-                            : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
-                        }`}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${selectedNode.data?.sourceType === "folder"
+                          ? "bg-white dark:bg-zinc-850 text-amber-500 shadow-sm"
+                          : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
+                          }`}
                       >
                         Folder
                       </button>
@@ -4345,7 +4679,7 @@ function CloudForgeEditor({
                           } catch (e) {
                             console.error("Failed to fetch folder/file size:", e);
                           }
-                          
+
                           setNodes((nds) =>
                             nds.map((node) => {
                               if (node.id === selectedNodeId) {
@@ -4558,10 +4892,10 @@ function CloudForgeEditor({
           const multiplier = isLive
             ? 1.00
             : (REGIONAL_MULTIPLIERS[nodeRegion.toLowerCase()] !== undefined
-                ? REGIONAL_MULTIPLIERS[nodeRegion.toLowerCase()]
-                : 1.15);
+              ? REGIONAL_MULTIPLIERS[nodeRegion.toLowerCase()]
+              : 1.15);
           const isLegacyUnavailable = LEGACY_UNAVAILABLE_REGIONS.includes(nodeRegion.toLowerCase());
-          
+
           const filteredInstances = db.filter((inst) => {
             const instVal = inst.value.toLowerCase();
             const isLegacy = inst.legacy !== undefined ? inst.legacy : instVal.startsWith("t2");
@@ -4569,20 +4903,20 @@ function CloudForgeEditor({
 
             const resolvedFamily = inst.family || (
               instVal.startsWith("t2") ? "t2" :
-              instVal.startsWith("t3") ? "t3" :
-              instVal.startsWith("t4g") ? "t4g" :
-              instVal.startsWith("m5") ? "m5" :
-              instVal.startsWith("m6g") ? "m6g" :
-              instVal.startsWith("c5") ? "c5" :
-              instVal.startsWith("c6g") ? "c6g" :
-              instVal.startsWith("r5") ? "r5" :
-              instVal.startsWith("r6g") ? "r6g" : "Other"
+                instVal.startsWith("t3") ? "t3" :
+                  instVal.startsWith("t4g") ? "t4g" :
+                    instVal.startsWith("m5") ? "m5" :
+                      instVal.startsWith("m6g") ? "m6g" :
+                        instVal.startsWith("c5") ? "c5" :
+                          instVal.startsWith("c6g") ? "c6g" :
+                            instVal.startsWith("r5") ? "r5" :
+                              instVal.startsWith("r6g") ? "r6g" : "Other"
             );
-            
+
             const resolvedCategory = (
               resolvedFamily.startsWith("t") || resolvedFamily.startsWith("m") ? "General Purpose" :
-              resolvedFamily.startsWith("c") ? "Compute Optimized" :
-              resolvedFamily.startsWith("r") ? "Memory Optimized" : "Other"
+                resolvedFamily.startsWith("c") ? "Compute Optimized" :
+                  resolvedFamily.startsWith("r") ? "Memory Optimized" : "Other"
             );
 
             if (instanceActiveTab !== "All" && resolvedCategory !== instanceActiveTab) return false;
@@ -4596,11 +4930,11 @@ function CloudForgeEditor({
           return (
             <div className="fixed inset-0 bg-slate-900/50 dark:bg-zinc-950/80 backdrop-blur-md z-[70] flex items-center justify-center p-6 animate-fade-in">
               <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-scale-up">
-                
+
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-zinc-900">
                   <div className="flex items-center gap-3">
-                    <Server size={20} className="text-sky-500" />
+                    <Cpu size={20} className="text-sky-500" />
                     <div>
                       <h3 className="font-bold text-base text-slate-800 dark:text-zinc-100">
                         Select EC2 Instance Type
@@ -4641,11 +4975,10 @@ function CloudForgeEditor({
                         key={tab}
                         type="button"
                         onClick={() => setInstanceActiveTab(tab)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
-                          instanceActiveTab === tab
-                            ? "bg-white dark:bg-zinc-800 text-amber-600 dark:text-amber-500 shadow-sm border border-slate-200/50 dark:border-zinc-700/50"
-                            : "text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200"
-                        }`}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${instanceActiveTab === tab
+                          ? "bg-white dark:bg-zinc-800 text-amber-600 dark:text-amber-500 shadow-sm border border-slate-200/50 dark:border-zinc-700/50"
+                          : "text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200"
+                          }`}
                       >
                         {tab}
                       </button>
@@ -4666,26 +4999,26 @@ function CloudForgeEditor({
                         const hourlyPrice = inst.pricing[currentPlatform] !== null ? inst.pricing[currentPlatform] : inst.pricing["Linux"];
                         const cost = parseFloat(((hourlyPrice || 0) * 730 * multiplier).toFixed(2));
                         const isSelected = selectedNode.data?.instanceType === inst.value;
-                        
+
                         const instVal = inst.value.toLowerCase();
                         const resolvedFamily = inst.family || (
                           instVal.startsWith("t2") ? "t2" :
-                          instVal.startsWith("t3") ? "t3" :
-                          instVal.startsWith("t4g") ? "t4g" :
-                          instVal.startsWith("m5") ? "m5" :
-                          instVal.startsWith("m6g") ? "m6g" :
-                          instVal.startsWith("c5") ? "c5" :
-                          instVal.startsWith("c6g") ? "c6g" :
-                          instVal.startsWith("r5") ? "r5" :
-                          instVal.startsWith("r6g") ? "r6g" : "Other"
+                            instVal.startsWith("t3") ? "t3" :
+                              instVal.startsWith("t4g") ? "t4g" :
+                                instVal.startsWith("m5") ? "m5" :
+                                  instVal.startsWith("m6g") ? "m6g" :
+                                    instVal.startsWith("c5") ? "c5" :
+                                      instVal.startsWith("c6g") ? "c6g" :
+                                        instVal.startsWith("r5") ? "r5" :
+                                          instVal.startsWith("r6g") ? "r6g" : "Other"
                         );
 
                         const isFreeTier = inst.freeTier !== undefined ? inst.freeTier : (
                           instVal === "t2.micro" || instVal === "t3.micro" || instVal === "t4g.micro"
                         );
-                        
+
                         const isCurrentGen = inst.currentGen !== undefined ? inst.currentGen : !instVal.startsWith("t2");
-                        
+
                         return (
                           <div
                             key={inst.value}
@@ -4695,20 +5028,18 @@ function CloudForgeEditor({
                               setInstanceSearchQuery("");
                               setInstanceActiveTab("All");
                             }}
-                            className={`flex flex-col p-4 rounded-xl border transition-all cursor-pointer group gap-3 text-left ${
-                              isSelected
-                                ? "bg-amber-500/5 dark:bg-amber-500/5 border-amber-500 shadow-sm"
-                                : "bg-white dark:bg-zinc-900/40 border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/60"
-                            }`}
+                            className={`flex flex-col p-4 rounded-xl border transition-all cursor-pointer group gap-3 text-left ${isSelected
+                              ? "bg-amber-500/5 dark:bg-amber-500/5 border-amber-500 shadow-sm"
+                              : "bg-white dark:bg-zinc-900/40 border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/60"
+                              }`}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg transition-colors ${
-                                  isSelected 
-                                    ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500" 
-                                    : "bg-slate-50 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 group-hover:bg-white dark:group-hover:bg-zinc-700"
-                                }`}>
-                                  <Server size={18} />
+                                <div className={`p-2 rounded-lg transition-colors ${isSelected
+                                  ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500"
+                                  : "bg-slate-50 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 group-hover:bg-white dark:group-hover:bg-zinc-700"
+                                  }`}>
+                                  <Cpu size={18} />
                                 </div>
                                 <div>
                                   <h4 className="font-bold text-sm text-slate-800 dark:text-zinc-100 flex items-center gap-2">
@@ -4807,7 +5138,7 @@ function CloudForgeEditor({
                   const parts = fsCurrentPath.split(/[\\/]/).filter(Boolean);
                   let currentBuild = "";
                   const hasDrive = fsCurrentPath.match(/^[a-zA-Z]:/);
-                  
+
                   return parts.map((part, index) => {
                     if (index === 0 && hasDrive) {
                       currentBuild = part + "\\";
@@ -4838,11 +5169,10 @@ function CloudForgeEditor({
                     <div
                       onDoubleClick={() => fetchFsDirectory(fsParentPath)}
                       onClick={() => setFsSelectedItem({ name: "..", path: fsParentPath, isDir: true })}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                        fsSelectedItem?.name === ".."
-                          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
-                          : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900 border border-transparent"
-                      }`}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${fsSelectedItem?.name === ".."
+                        ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                        : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900 border border-transparent"
+                        }`}
                     >
                       <FolderOpen size={16} className="text-amber-500/70 shrink-0" />
                       <span>.. (Parent Directory)</span>
@@ -4855,11 +5185,10 @@ function CloudForgeEditor({
                       key={folder.path}
                       onDoubleClick={() => fetchFsDirectory(folder.path)}
                       onClick={() => setFsSelectedItem(folder)}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                        fsSelectedItem?.path === folder.path
-                          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
-                          : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-900 border border-transparent"
-                      }`}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${fsSelectedItem?.path === folder.path
+                        ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                        : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-900 border border-transparent"
+                        }`}
                     >
                       <Folder size={16} className="text-amber-500 shrink-0" />
                       <span className="truncate">{folder.name}</span>
@@ -4875,11 +5204,10 @@ function CloudForgeEditor({
                         setIsFsModalOpen(false);
                       }}
                       onClick={() => setFsSelectedItem(file)}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                        fsSelectedItem?.path === file.path
-                          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
-                          : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-900 border border-transparent"
-                      }`}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${fsSelectedItem?.path === file.path
+                        ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                        : "text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-900 border border-transparent"
+                        }`}
                     >
                       <File size={16} className="text-slate-400 dark:text-zinc-600 shrink-0" />
                       <span className="truncate">{file.name}</span>
@@ -4962,6 +5290,7 @@ function CloudForgeEditor({
         {/* CONTEXT MENU */}
         {contextMenu && (
           <div
+            ref={contextMenuRef}
             className="absolute z-50 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl rounded-xl py-1.5 min-w-[160px] text-sm animate-fade-in font-medium"
             style={{ top: contextMenu.y, left: contextMenu.x }}
             onClick={(e) => e.stopPropagation()}
@@ -5107,17 +5436,15 @@ function CloudForgeEditor({
                           key={opt.value}
                           id={`conn-opt-${idx}`}
                           onClick={() => handleCreateAndConnect(opt.nodeType, opt.labelType)}
-                          className={`flex items-center gap-2.5 px-2.5 py-2 w-full text-left text-xs font-bold rounded-lg transition-colors group ${
-                            isActive
-                              ? "bg-slate-100 dark:bg-zinc-900 text-amber-500 dark:text-amber-400"
-                              : "hover:bg-slate-50 dark:hover:bg-zinc-900 text-slate-700 dark:text-zinc-300"
-                          }`}
+                          className={`flex items-center gap-2.5 px-2.5 py-2 w-full text-left text-xs font-bold rounded-lg transition-colors group ${isActive
+                            ? "bg-slate-100 dark:bg-zinc-900 text-amber-500 dark:text-amber-400"
+                            : "hover:bg-slate-50 dark:hover:bg-zinc-900 text-slate-700 dark:text-zinc-300"
+                            }`}
                         >
-                          <div className={`p-1 rounded transition-colors ${
-                            isActive
-                              ? "bg-amber-100 dark:bg-amber-500/10 text-amber-500"
-                              : "bg-slate-100 dark:bg-zinc-850 group-hover:bg-amber-100 dark:group-hover:bg-amber-500/10 text-slate-500 dark:text-zinc-400 group-hover:text-amber-500"
-                          }`}>
+                          <div className={`p-1 rounded transition-colors ${isActive
+                            ? "bg-amber-100 dark:bg-amber-500/10 text-amber-500"
+                            : "bg-slate-100 dark:bg-zinc-850 group-hover:bg-amber-100 dark:group-hover:bg-amber-500/10 text-slate-500 dark:text-zinc-400 group-hover:text-amber-500"
+                            }`}>
                             <opt.icon size={12} />
                           </div>
                           <span>{opt.label}</span>
@@ -5280,7 +5607,7 @@ function CloudForgeEditor({
         {isDeploymentsModalOpen && (
           <div className="fixed inset-0 bg-slate-900/40 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fade-in">
             <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-6xl h-[650px] flex overflow-hidden shadow-2xl animate-scale-up">
-              
+
               {/* Left Panel: List of Deployments */}
               <div className="w-80 shrink-0 border-r border-slate-200 dark:border-zinc-800 flex flex-col bg-slate-50 dark:bg-zinc-900/30">
                 <div className="h-16 shrink-0 px-4 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 flex justify-between items-center">
@@ -5298,21 +5625,19 @@ function CloudForgeEditor({
                       const isLatest = dep.id === latestDeploymentId;
                       const isSelected = selectedDeployment?.id === dep.id;
                       const formattedDate = new Date(dep.timestamp).toLocaleString();
-                      
+
                       return (
                         <button
                           key={dep.id}
                           onClick={() => setSelectedDeployment(dep)}
-                          className={`w-full text-left p-3.5 rounded-xl border transition-all flex flex-col gap-1.5 group select-none ${
-                            isSelected
-                              ? "bg-amber-100/50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30"
-                              : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-850 hover:border-slate-300 dark:hover:border-zinc-750"
-                          }`}
+                          className={`w-full text-left p-3.5 rounded-xl border transition-all flex flex-col gap-1.5 group select-none ${isSelected
+                            ? "bg-amber-100/50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30"
+                            : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-850 hover:border-slate-300 dark:hover:border-zinc-750"
+                            }`}
                         >
                           <div className="flex justify-between items-center w-full">
-                            <span className={`text-[11px] font-bold font-mono tracking-wide ${
-                              isSelected ? "text-amber-700 dark:text-amber-500" : "text-slate-600 dark:text-zinc-400"
-                            }`}>
+                            <span className={`text-[11px] font-bold font-mono tracking-wide ${isSelected ? "text-amber-700 dark:text-amber-500" : "text-slate-600 dark:text-zinc-400"
+                              }`}>
                               Deploy #{deployments.length - idx}
                             </span>
                             {isLatest && hasDeployment && (
@@ -5321,7 +5646,7 @@ function CloudForgeEditor({
                               </span>
                             )}
                           </div>
-                          
+
                           <div className="text-xs text-slate-400 dark:text-zinc-500 flex items-center gap-1">
                             <Clock size={11} /> {formattedDate}
                           </div>
@@ -5375,12 +5700,42 @@ function CloudForgeEditor({
                   </div>
                   <div className="flex items-center gap-3">
                     {selectedDeployment && (
-                      <button
-                        onClick={() => handleRedeploy(selectedDeployment.id)}
-                        className="flex items-center gap-1.5 px-4 h-9 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-md transition-all active:scale-95"
-                      >
-                        <CloudLightning size={13} className="animate-pulse" /> Deploy This Version
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            const confirmLoad = window.confirm("Are you sure you want to load this deployment version onto the canvas? Any current modifications on your canvas will be overwritten.");
+                            if (!confirmLoad) return;
+                            takeSnapshot();
+                            
+                            let targetNodes = [];
+                            let targetEdges = [];
+                            
+                            if (selectedDeployment.canvasState) {
+                              targetNodes = selectedDeployment.canvasState.nodes || [];
+                              targetEdges = selectedDeployment.canvasState.edges || [];
+                            } else {
+                              const parsed = reconstructCanvasFromCode(selectedDeployment.code);
+                              targetNodes = parsed.nodes;
+                              targetEdges = parsed.edges;
+                            }
+                            
+                            setNodes(targetNodes);
+                            setEdges(targetEdges);
+                            addLog(`🔄 Loaded deployment version ${selectedDeployment.id} onto the canvas.`, "success");
+                            setIsDeploymentsModalOpen(false);
+                            setSelectedDeployment(null);
+                          }}
+                          className="flex items-center gap-1.5 px-4 h-9 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 dark:border-zinc-800 dark:hover:border-zinc-750 bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 shadow-sm transition-all active:scale-95"
+                        >
+                          <FolderOpen size={13} /> Load to Canvas
+                        </button>
+                        <button
+                          onClick={() => handleRedeploy(selectedDeployment.id)}
+                          className="flex items-center gap-1.5 px-4 h-9 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-md transition-all active:scale-95"
+                        >
+                          <CloudLightning size={13} className="animate-pulse" /> Deploy This Version
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={() => {
@@ -5425,66 +5780,458 @@ function CloudForgeEditor({
           </div>
         )}
 
-        {/* Floating Cost Heatmap Legend & Summary */}
-        {activeMode === "budgets" && isBudgetLegendCollapsed && (
-          <button
-            onClick={() => setUserCollapsedLegend(false)}
-            className="absolute bottom-6 z-30 bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl border border-slate-200 dark:border-zinc-800 h-10 px-3 rounded-xl shadow-xl dark:shadow-2xl flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-900 transition-all duration-300 pointer-events-auto select-none"
-            style={{ right: selectedNode ? '360px' : '24px' }}
-            title="Expand Budget Summary"
-          >
-            <Coins size={16} className="text-emerald-500" />
-            <span className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-500">
-              ${nodes.reduce((acc, node) => acc + (node.data?.cost || 0), 0).toFixed(2)}/mo
-            </span>
-          </button>
-        )}
+        {/* Dedicated Project Cost Dashboard Screen */}
+        {activeMode === "budgets" && (
+          <div className="absolute inset-0 bg-slate-50 dark:bg-[#09090b] z-30 flex flex-col pt-32 px-8 pb-8 overflow-y-auto select-text custom-scrollbar animate-fade-in">
+            {(() => {
+              const pricedNodes = nodes.filter((n) =>
+                n.type === "ec2Node" ||
+                n.type === "s3Node" ||
+                n.type === "iamNode" ||
+                n.type === "iamGroupNode"
+              );
+              return (
+                <div className="flex flex-col gap-6 max-w-6xl w-full mx-auto">
 
-        {activeMode === "budgets" && !isBudgetLegendCollapsed && (
-          <div
-            className="absolute bottom-6 z-30 bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl border border-slate-200 dark:border-zinc-800 p-4 rounded-2xl shadow-xl dark:shadow-2xl flex flex-col gap-3 pointer-events-auto min-w-[240px] transition-all duration-300 animate-fade-in"
-            style={{ right: selectedNode ? '360px' : '24px' }}
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">Total Monthly Cost</h3>
-                <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-500 mt-1 font-mono">
-                  ${nodes.reduce((acc, node) => acc + (node.data?.cost || 0), 0).toFixed(2)}/mo
-                </p>
-              </div>
-              <button
-                onClick={() => setUserCollapsedLegend(true)}
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 transition-colors"
-                title="Minimize"
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <div className="border-t border-slate-100 dark:border-zinc-800/80 pt-2 flex flex-col gap-1.5">
-              <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Heatmap Legend</span>
-              <div className="flex flex-col gap-1.5 text-[11px] font-medium text-slate-600 dark:text-zinc-400">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded bg-slate-400/50 border border-slate-400/20 shadow-sm"></span>
-                  <span>Free Resources ($0)</span>
+                  {/* Title Section */}
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Coins className="text-emerald-500" size={22} /> Cost Analysis
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                        A comprehensive analysis of cloud service configurations and estimated monthly expenses.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveMode("dev")}
+                      className="flex items-center gap-1.5 px-4 h-9 text-xs font-bold rounded-xl border border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors pointer-events-auto shadow-sm"
+                    >
+                      <Activity size={13} /> Return to Canvas
+                    </button>
+                  </div>
+
+                  {/* Summary Cards Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+
+                    {/* Total Cost */}
+                    <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/80 shadow-sm flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Total Monthly Cost</span>
+                        <span className="text-2xl font-black text-emerald-600 dark:text-emerald-500 mt-1 font-mono">
+                          ${nodes.reduce((acc, node) => acc + (node.type !== "s3ObjectNode" && node.type !== "shapeNode" ? (node.data?.cost || 0) : 0), 0).toFixed(2)}/mo
+                        </span>
+                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 mt-1 font-medium">Estimated AWS spend</span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400">
+                        <Coins size={20} />
+                      </div>
+                    </div>
+
+                    {/* Compute cost */}
+                    <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/80 shadow-sm flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Compute Cost</span>
+                        <span className="text-2xl font-black text-blue-600 dark:text-blue-500 mt-1 font-mono">
+                          ${nodes.filter(n => n.type === "ec2Node").reduce((acc, node) => acc + (node.data?.cost || 0), 0).toFixed(2)}/mo
+                        </span>
+                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 mt-1 font-medium">
+                          {nodes.filter(n => n.type === "ec2Node").length} EC2 Instance(s)
+                        </span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400">
+                        <Cpu size={20} />
+                      </div>
+                    </div>
+
+                    {/* Storage cost */}
+                    <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/80 shadow-sm flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Storage Cost</span>
+                        <span className="text-2xl font-black text-amber-600 dark:text-amber-500 mt-1 font-mono">
+                          ${nodes.filter(n => n.type === "s3Node").reduce((acc, node) => acc + (node.data?.cost || 0), 0).toFixed(2)}/mo
+                        </span>
+                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 mt-1 font-medium">
+                          {nodes.filter(n => n.type === "s3Node").length} S3 Bucket(s)
+                        </span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400">
+                        <Database size={20} />
+                      </div>
+                    </div>
+
+                    {/* Free resources */}
+                    <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/80 shadow-sm flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Free Tier / Config</span>
+                        <span className="text-2xl font-black text-slate-500 dark:text-zinc-400 mt-1 font-mono">
+                          $0.00/mo
+                        </span>
+                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 mt-1 font-medium">
+                          {nodes.filter(n => n.type === "iamNode" || n.type === "iamGroupNode").length} IAM Resource(s)
+                        </span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400">
+                        <Shield size={20} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cost Proportion Progress Bar */}
+                  {nodes.some(n => n.type === "ec2Node" || n.type === "s3Node") && (
+                    <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/80 shadow-sm flex flex-col gap-2">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                        <span>Expense Distribution</span>
+                        <div className="flex gap-4">
+                          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded bg-blue-500"></span> Compute</span>
+                          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded bg-amber-500"></span> Storage</span>
+                        </div>
+                      </div>
+                      {(() => {
+                        const ec2Tot = nodes.filter(n => n.type === "ec2Node").reduce((acc, n) => acc + (n.data?.cost || 0), 0);
+                        const s3Tot = nodes.filter(n => n.type === "s3Node").reduce((acc, n) => acc + (n.data?.cost || 0), 0);
+                        const tot = ec2Tot + s3Tot;
+
+                        if (tot === 0) return null;
+
+                        const ec2Percent = (ec2Tot / tot) * 100;
+                        const s3Percent = (s3Tot / tot) * 100;
+
+                        return (
+                          <div className="w-full h-3 rounded-full bg-slate-100 dark:bg-zinc-800 overflow-hidden flex">
+                            <div style={{ width: `${ec2Percent}%` }} className="bg-blue-500 h-full transition-all duration-500" title={`Compute: ${ec2Percent.toFixed(1)}%`}></div>
+                            <div style={{ width: `${s3Percent}%` }} className="bg-amber-500 h-full transition-all duration-500" title={`Storage: ${s3Percent.toFixed(1)}%`}></div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Filters Bar */}
+                  <div className="flex flex-col md:flex-row justify-between items-center gap-4 mt-2">
+                    <div className="flex items-center gap-2 bg-white/95 dark:bg-zinc-900/95 border border-slate-200 dark:border-zinc-800 px-3 py-2.5 rounded-xl shadow-sm w-full md:max-w-md">
+                      <Search size={16} className="text-slate-400 dark:text-zinc-500" />
+                      <input
+                        type="text"
+                        value={budgetSearch}
+                        onChange={(e) => setBudgetSearch(e.target.value)}
+                        placeholder="Search services by name or type..."
+                        className="bg-transparent text-sm w-full focus:outline-none text-slate-800 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/80 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
+                      {[
+                        { id: "all", label: "All Services" },
+                        { id: "compute", label: "Compute" },
+                        { id: "storage", label: "Storage" },
+                        { id: "free", label: "Access & Security" }
+                      ].map((cat) => (
+                        <button
+                          key={cat.id}
+                          onClick={() => setBudgetCategory(cat.id)}
+                          className={`px-3.5 h-8 text-xs font-bold rounded-lg transition-all shrink-0 ${budgetCategory === cat.id
+                            ? "bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/50 dark:border-zinc-700/50"
+                            : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
+                            }`}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Service Cards List */}
+                  <div className="flex flex-col gap-3 mt-2 pb-16">
+                    {(() => {
+                      const filteredNodes = pricedNodes.filter((node) => {
+                        const label = (node.data?.label || "").toLowerCase();
+                        const id = node.id.toLowerCase();
+                        const typeLabel = node.type.toLowerCase();
+                        const searchMatch = label.includes(budgetSearch.toLowerCase()) || id.includes(budgetSearch.toLowerCase()) || typeLabel.includes(budgetSearch.toLowerCase());
+
+                        if (!searchMatch) return false;
+
+                        if (budgetCategory === "compute") return node.type === "ec2Node";
+                        if (budgetCategory === "storage") return node.type === "s3Node";
+                        if (budgetCategory === "free") return node.type === "iamNode" || node.type === "iamGroupNode";
+                        return true;
+                      });
+
+                      if (filteredNodes.length === 0) {
+                        return (
+                          <div className="py-16 text-center text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl">
+                            <Coins size={36} className="mx-auto mb-2 text-slate-300 dark:text-zinc-700" />
+                            <p className="text-sm font-semibold">No services found matching the criteria.</p>
+                          </div>
+                        );
+                      }
+
+                      return filteredNodes.map((node) => {
+                        const isExpanded = expandedBudgetNodes.has(node.id);
+
+                        let serviceType = "AWS Resource";
+                        let serviceCategory = "General";
+                        let iconBg = "bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400";
+                        let IconComp = HardDrive;
+                        let costText = `$${(node.data?.cost || 0).toFixed(2)}/mo`;
+
+                        if (node.type === "ec2Node") {
+                          serviceType = "EC2 Instance";
+                          serviceCategory = "Compute";
+                          iconBg = "bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30";
+                          IconComp = Cpu;
+                        } else if (node.type === "s3Node") {
+                          serviceType = "S3 Bucket";
+                          serviceCategory = "Storage";
+                          iconBg = "bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30";
+                          IconComp = Database;
+                        } else if (node.type === "iamNode") {
+                          serviceType = `IAM ${node.data?.iamType || "User"}`;
+                          serviceCategory = "Access Control";
+                          iconBg = "bg-purple-50 text-purple-600 dark:bg-purple-950/20 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30";
+                          IconComp = Shield;
+                          costText = "$0.00/mo (Free)";
+                        } else if (node.type === "iamGroupNode") {
+                          serviceType = "IAM Group";
+                          serviceCategory = "Access Control";
+                          iconBg = "bg-purple-50 text-purple-600 dark:bg-purple-950/20 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30";
+                          IconComp = Shield;
+                          costText = "$0.00/mo (Free)";
+                        }
+
+                        return (
+                          <div
+                            key={node.id}
+                            className={`border rounded-2xl bg-white dark:bg-zinc-900 shadow-sm hover:shadow transition-all overflow-hidden flex flex-col pointer-events-auto ${isExpanded
+                              ? "border-amber-300 dark:border-zinc-700"
+                              : "border-slate-200 dark:border-zinc-800"
+                              }`}
+                          >
+                            {/* Header Row */}
+                            <div
+                              onClick={() => toggleBudgetNode(node.id)}
+                              className="p-4 flex items-center justify-between cursor-pointer select-none"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className={`p-2.5 rounded-xl ${iconBg}`}>
+                                  <IconComp size={18} />
+                                </div>
+                                <div className="flex flex-col">
+                                  <h4 className="font-bold text-sm text-slate-800 dark:text-zinc-100">
+                                    {node.data?.label || node.id}
+                                  </h4>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wide">
+                                      {serviceType}
+                                    </span>
+                                    <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-zinc-700"></span>
+                                    <span className="text-[10px] font-bold font-mono text-slate-450 dark:text-zinc-500 uppercase">
+                                      {node.data?.region || userSettings.defaultRegion || "us-east-1"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-4">
+                                <span className={`text-sm font-extrabold font-mono ${node.type === "ec2Node"
+                                  ? "text-blue-600 dark:text-blue-400"
+                                  : node.type === "s3Node"
+                                    ? "text-amber-600 dark:text-amber-400"
+                                    : "text-slate-400 dark:text-zinc-500"
+                                  }`}>
+                                  {costText}
+                                </span>
+                                <div className="text-slate-400 dark:text-zinc-500">
+                                  <ChevronRight size={16} className={`transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Expanded details container */}
+                            {isExpanded && (
+                              <div className="border-t border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/20 p-5 flex flex-col gap-4 animate-slide-down">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                                  {/* Left Column: Metrics list */}
+                                  <div>
+                                    <h5 className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-3">
+                                      Cost & Size Metrics
+                                    </h5>
+
+                                    {node.type === "ec2Node" && (() => {
+                                      const instanceType = node.data?.instanceType || "t2.micro";
+                                      const volumeSize = node.data?.volumeSize || 8;
+                                      const region = node.data?.region || userSettings.defaultRegion || "us-east-1";
+                                      const platform = node.data?.platform || "Linux";
+
+                                      const matchedType = ALL_INSTANCE_TYPES.find(t => t.value === instanceType);
+                                      const hourlyPrice = matchedType?.pricing?.[platform] || matchedType?.pricing?.Linux || 0.0116;
+                                      const multiplier = REGIONAL_MULTIPLIERS[region.toLowerCase()] || 1.15;
+
+                                      const hourlyTotal = hourlyPrice;
+                                      const monthlyCompute = hourlyPrice * 730 * multiplier;
+                                      const monthlyStorage = volumeSize * 0.08;
+
+                                      return (
+                                        <ul className="flex flex-col gap-2.5 text-xs text-slate-700 dark:text-zinc-300">
+                                          <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
+                                            <span className="font-medium text-slate-450 dark:text-zinc-500">Compute Tier:</span>
+                                            <span className="font-bold font-mono bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-850 px-2 py-0.5 rounded">
+                                              {instanceType} ({matchedType?.cpu || 1} vCPU, {matchedType?.ram || "1 GiB"})
+                                            </span>
+                                          </li>
+                                          <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
+                                            <span className="font-medium text-slate-450 dark:text-zinc-500">Compute Rate:</span>
+                                            <span className="font-bold font-mono">
+                                              ${hourlyTotal.toFixed(4)}/hour &times; 730 hrs
+                                            </span>
+                                          </li>
+                                          <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
+                                            <span className="font-medium text-slate-450 dark:text-zinc-500">EBS Volume:</span>
+                                            <span className="font-bold font-mono">
+                                              {volumeSize} GB EBS @ $0.08/GB-mo
+                                            </span>
+                                          </li>
+                                          <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
+                                            <span className="font-medium text-slate-450 dark:text-zinc-500">Regional Multiplier:</span>
+                                            <span className="font-bold font-mono bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">
+                                              {region} ({multiplier.toFixed(2)}x)
+                                            </span>
+                                          </li>
+                                          <li className="flex justify-between items-center font-bold text-slate-800 dark:text-zinc-100 pt-1 text-[13px]">
+                                            <span>Subtotals:</span>
+                                            <span className="font-mono text-blue-600 dark:text-blue-400">
+                                              ${monthlyCompute.toFixed(2)} (Compute) + ${monthlyStorage.toFixed(2)} (Storage)
+                                            </span>
+                                          </li>
+                                        </ul>
+                                      );
+                                    })()}
+
+                                    {node.type === "s3Node" && (() => {
+                                      const storageGB = node.data?.storageGB || 10;
+                                      const isAuto = !!node.data?.isAutoSized;
+                                      const childObjects = nodes.filter(n => n.type === "s3ObjectNode" && n.parentId === node.id);
+
+                                      return (
+                                        <div className="flex flex-col gap-3">
+                                          <ul className="flex flex-col gap-2.5 text-xs text-slate-700 dark:text-zinc-300">
+                                            <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
+                                              <span className="font-medium text-slate-450 dark:text-zinc-500">Capacity Type:</span>
+                                              <span className="font-bold bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-850 px-2 py-0.5 rounded">
+                                                {isAuto ? "Auto-Calculated" : "Manual Estimate"}
+                                              </span>
+                                            </li>
+                                            <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
+                                              <span className="font-medium text-slate-450 dark:text-zinc-500">Storage Quantity:</span>
+                                              <span className="font-bold font-mono">
+                                                {storageGB >= 1 ? `${storageGB.toFixed(3)} GB` : `${(storageGB * 1024).toFixed(1)} MB`}
+                                              </span>
+                                            </li>
+                                            <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
+                                              <span className="font-medium text-slate-450 dark:text-zinc-500">Storage Class Pricing:</span>
+                                              <span className="font-bold font-mono">
+                                                Amazon S3 Standard @ $0.023/GB-mo
+                                              </span>
+                                            </li>
+                                            <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
+                                              <span className="font-medium text-slate-450 dark:text-zinc-500">Versioning:</span>
+                                              <span className="font-bold">
+                                                {node.data?.versioning ? "Enabled" : "Disabled"}
+                                              </span>
+                                            </li>
+                                          </ul>
+
+                                          {childObjects.length > 0 && (
+                                            <div className="mt-2 bg-white dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-xl p-3 flex flex-col gap-2">
+                                              <h6 className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
+                                                Nested Objects ({childObjects.length})
+                                              </h6>
+                                              <div className="max-h-24 overflow-y-auto pr-1 flex flex-col gap-1.5 custom-scrollbar text-[11px]">
+                                                {childObjects.map(obj => (
+                                                  <div key={obj.id} className="flex justify-between items-center font-mono">
+                                                    <span className="text-slate-600 dark:text-zinc-400 truncate max-w-[160px]" title={obj.data?.key}>
+                                                      📄 {obj.data?.key || "object"}
+                                                    </span>
+                                                    <span className="text-slate-400 font-medium">
+                                                      {obj.data?.sizeGB >= 0.001
+                                                        ? `${(obj.data?.sizeGB).toFixed(3)} GB`
+                                                        : `${((obj.data?.sizeGB || 0) * 1024).toFixed(1)} MB`}
+                                                    </span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+
+                                    {(node.type === "iamNode" || node.type === "iamGroupNode") && (
+                                      <ul className="flex flex-col gap-2.5 text-xs text-slate-700 dark:text-zinc-300">
+                                        <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
+                                          <span className="font-medium text-slate-450 dark:text-zinc-500">Access Type:</span>
+                                          <span className="font-bold">
+                                            {node.type === "iamGroupNode" ? "IAM User Group" : `IAM User (${node.data?.iamType || "User"})`}
+                                          </span>
+                                        </li>
+                                        <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
+                                          <span className="font-medium text-slate-450 dark:text-zinc-500">Billing Category:</span>
+                                          <span className="font-bold text-emerald-600 dark:text-emerald-500">
+                                            Included / Free Tier
+                                          </span>
+                                        </li>
+                                      </ul>
+                                    )}
+                                  </div>
+
+                                  {/* Right Column: Billing Explanation */}
+                                  <div className="flex flex-col justify-between">
+                                    <div>
+                                      <h5 className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-3">
+                                        Billing Explanation
+                                      </h5>
+                                      <p className="text-xs text-slate-600 dark:text-zinc-400 leading-normal font-medium p-3 rounded-xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 shadow-inner">
+                                        {node.type === "ec2Node" && (
+                                          "Amazon EC2 instances compute fees are computed on an hourly billing rate multiplied by 730 base hours per month. Elastic Block Store (EBS) volume storage fees are appended using a flat rate of $0.08 per Gigabyte-month. The combined pricing is scaled based on the target deployment region's multiplier."
+                                        )}
+                                        {node.type === "s3Node" && (
+                                          "Amazon Simple Storage Service (S3) Standard Tier charges a linear storage billing rate of $0.023 per Gigabyte-month. S3 Object assets nested inside this S3 Bucket container are indexed automatically and directly accumulate into the bucket's storage size metric."
+                                        )}
+                                        {(node.type === "iamNode" || node.type === "iamGroupNode") && (
+                                          "AWS IAM (Identity and Access Management) resources (Users, Groups, Policies, Roles, and Attachments) are security configurations that reside inside the AWS billing control plane at no cost. AWS does not levy any base compute, storage, or operational fees for IAM."
+                                        )}
+                                      </p>
+                                    </div>
+
+                                    <div className="mt-4 flex justify-end">
+                                      <button
+                                        onClick={() => {
+                                          setActiveMode("dev");
+                                          setTimeout(() => {
+                                            handleFocusNode(node.id);
+                                          }, 50);
+                                        }}
+                                        className="flex items-center gap-1.5 px-4 h-8 text-xs font-bold rounded-xl border border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors pointer-events-auto"
+                                      >
+                                        <ArrowUpRight size={13} /> Locate on Canvas
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded bg-emerald-500 shadow-sm shadow-emerald-500/50"></span>
-                  <span>Low Cost (&lt; $5)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded bg-yellow-500 shadow-sm shadow-yellow-500/50"></span>
-                  <span>Medium-Low (&lt; $20)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded bg-orange-500 shadow-sm shadow-orange-500/50"></span>
-                  <span>Medium-High (&lt; $100)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded bg-rose-500 shadow-sm shadow-rose-500/50 animate-pulse"></span>
-                  <span>High Cost ($100+)</span>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
           </div>
         )}
 
@@ -5502,7 +6249,7 @@ function CloudForgeEditor({
                 return acc + (weights[f.severity] || 0);
               }, 0));
               const strokeColor = score > 80 ? "rgb(16, 185, 129)" : score > 50 ? "rgb(245, 158, 11)" : "rgb(244, 63, 94)";
-              
+
               return (
                 <>
                   <Shield size={16} style={{ color: strokeColor }} />
@@ -5530,9 +6277,8 @@ function CloudForgeEditor({
                 <h3 className="text-xs font-bold text-slate-800 dark:text-zinc-200 uppercase tracking-wider">Cloud Audit Findings</h3>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                  allFindings.length === 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500 animate-pulse"
-                }`}>
+                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${allFindings.length === 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500 animate-pulse"
+                  }`}>
                   {allFindings.length} {allFindings.length === 1 ? "Issue" : "Issues"}
                 </span>
                 <button
@@ -5567,13 +6313,13 @@ function CloudForgeEditor({
             {/* Scrollable Findings list */}
             <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-2 pr-1">
               {allFindings.map((f, idx) => {
-                const badgeStyle = f.severity === "critical" 
-                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20" 
-                  : f.severity === "high" 
-                  ? "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
-                  : f.severity === "medium"
-                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20"
-                  : "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20";
+                const badgeStyle = f.severity === "critical"
+                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                  : f.severity === "high"
+                    ? "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
+                    : f.severity === "medium"
+                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20"
+                      : "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20";
                 return (
                   <div key={idx} className="flex flex-col gap-1 p-2 bg-slate-50/50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-800/50 rounded-xl">
                     <div className="flex items-center justify-between gap-2">
@@ -5844,15 +6590,15 @@ const ProjectsDashboard = ({
                 <div
                   key={proj.id}
                   className={`bg-white/80 dark:bg-zinc-900/40 backdrop-blur-xl border p-4 rounded-xl flex items-center justify-between gap-4 transition-all ${activeProjectId === proj.id
-                      ? "border-slate-200 dark:border-zinc-800/80 bg-amber-50/5 dark:bg-amber-500/5 shadow-md shadow-amber-500/5 pl-3"
-                      : "border-slate-200 dark:border-zinc-800/80 hover:border-amber-500/40"
+                    ? "border-slate-200 dark:border-zinc-800/80 bg-amber-50/5 dark:bg-amber-500/5 shadow-md shadow-amber-500/5 pl-3"
+                    : "border-slate-200 dark:border-zinc-800/80 hover:border-amber-500/40"
                     }`}
                   style={activeProjectId === proj.id ? { borderLeft: '4px solid #f59e0b' } : {}}
                 >
                   <div className="flex items-center gap-3.5 flex-1 min-w-0">
                     <div className={`p-2.5 rounded-xl ${activeProjectId === proj.id
-                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-500"
-                        : "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500"
+                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-500"
+                      : "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500"
                       }`}>
                       <Layers size={18} />
                     </div>

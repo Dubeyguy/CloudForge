@@ -69,6 +69,17 @@ class CloudForgeStack extends TerraformStack {
     new AwsProvider(this, 'AWS', { region: primaryRegion });
 
     const resourceMap = new Map<string, { type: string; iamType?: string; name: string; ref: any }>();
+    const iamResources = new Map<string, { ref: any; id: string }>();
+
+    const getOrCreateIamResource = (iamType: string, name: string, creator: () => any) => {
+      const key = `${iamType}_${name}`;
+      if (iamResources.has(key)) {
+        return iamResources.get(key)!.ref;
+      }
+      const ref = creator();
+      iamResources.set(key, { ref, id: nodes.find(n => (n.data?.label || n.id).toLowerCase().replace(/[^a-z0-9-]/g, '-') === name)?.id || name });
+      return ref;
+    };
 
     nodes.forEach((node) => {
       const safeId = node.id.replace(/[^a-zA-Z0-9]/g, '');
@@ -97,23 +108,23 @@ class CloudForgeStack extends TerraformStack {
 
         resourceMap.set(node.id, { type: 's3', name: bucket.bucket, ref: bucket });
       } else if (node.type === 'iamGroupNode') {
-        const group = new IamGroup(this, safeId, {
+        const group = getOrCreateIamResource('Group', labelName, () => new IamGroup(this, safeId, {
           name: labelName,
-        });
+        }));
         resourceMap.set(node.id, { type: 'iam', iamType: 'Group', name: labelName, ref: group });
       } else if (node.type === 'iamNode') {
         switch (node.data.iamType) {
           case 'User':
-            const user = new IamUser(this, safeId, {
+            const user = getOrCreateIamResource('User', labelName, () => new IamUser(this, safeId, {
               name: labelName,
               tags: { ManagedBy: 'CloudForge' },
-            });
+            }));
             resourceMap.set(node.id, { type: 'iam', iamType: 'User', name: labelName, ref: user });
             break;
           case 'Group':
-            const group = new IamGroup(this, safeId, {
+            const group = getOrCreateIamResource('Group', labelName, () => new IamGroup(this, safeId, {
               name: labelName,
-            });
+            }));
             resourceMap.set(node.id, { type: 'iam', iamType: 'Group', name: labelName, ref: group });
             break;
           case 'Role':
@@ -133,7 +144,7 @@ class CloudForgeStack extends TerraformStack {
               principal = { Service: roleService };
             }
 
-            const role = new IamRole(this, safeId, {
+            const role = getOrCreateIamResource('Role', labelName, () => new IamRole(this, safeId, {
               name: labelName,
               assumeRolePolicy: JSON.stringify({
                 Version: '2012-10-17',
@@ -147,7 +158,7 @@ class CloudForgeStack extends TerraformStack {
                 ],
               }),
               tags: { ManagedBy: 'CloudForge' },
-            });
+            }));
             resourceMap.set(node.id, { type: 'iam', iamType: 'Role', name: labelName, ref: role });
             break;
           case 'Policy':
@@ -155,7 +166,7 @@ class CloudForgeStack extends TerraformStack {
             const policyResource = node.data.policyResource || '*';
             const actions = policyActionsStr.split(',').map((act) => act.trim()).filter(Boolean);
 
-            const policy = new IamPolicy(this, safeId, {
+            const policy = getOrCreateIamResource('Policy', labelName, () => new IamPolicy(this, safeId, {
               name: labelName,
               policy: JSON.stringify({
                 Version: '2012-10-17',
@@ -167,7 +178,7 @@ class CloudForgeStack extends TerraformStack {
                   },
                 ],
               }),
-            });
+            }));
             resourceMap.set(node.id, { type: 'iam', iamType: 'Policy', name: labelName, ref: policy });
             break;
         }
@@ -290,8 +301,9 @@ class CloudForgeStack extends TerraformStack {
       }
     });
 
-    // Track groups per user to avoid overriding multiple memberships
+    // Track groups per user (keyed by user name to support a single user in multiple groups/canvas-nodes)
     const userGroups = new Map<string, { userRef: IamUser; userLabel: string; groupNames: string[]; groupRefs: IamGroup[] }>();
+    const createdAttachments = new Set<string>();
 
     edges.forEach((edge, index) => {
       const sourceNode = resourceMap.get(edge.source);
@@ -306,16 +318,21 @@ class CloudForgeStack extends TerraformStack {
       ) {
         const userNode = sourceNode.iamType === 'User' ? sourceNode : targetNode;
         const groupNode = sourceNode.iamType === 'Group' ? sourceNode : targetNode;
-        const userNodeId = sourceNode.iamType === 'User' ? edge.source : edge.target;
 
         const userRef = userNode.ref as IamUser;
         const groupRef = groupNode.ref as IamGroup;
+        const userName = userNode.name;
 
-        if (!userGroups.has(userNodeId)) {
-          userGroups.set(userNodeId, { userRef, userLabel: userNode.name, groupNames: [], groupRefs: [] });
+        if (!userGroups.has(userName)) {
+          userGroups.set(userName, { userRef, userLabel: userName, groupNames: [], groupRefs: [] });
         }
-        userGroups.get(userNodeId)!.groupNames.push(groupRef.name);
-        userGroups.get(userNodeId)!.groupRefs.push(groupRef);
+        const uGroup = userGroups.get(userName)!;
+        if (!uGroup.groupNames.includes(groupRef.name)) {
+          uGroup.groupNames.push(groupRef.name);
+        }
+        if (!uGroup.groupRefs.includes(groupRef)) {
+          uGroup.groupRefs.push(groupRef);
+        }
       }
 
       // Policy <-> User/Group/Role Attachment
@@ -327,24 +344,29 @@ class CloudForgeStack extends TerraformStack {
         const policyRef = policyNode.ref as IamPolicy;
         const safeAttachId = `${attachedNodeId}_${index}`.replace(/[^a-zA-Z0-9]/g, '');
 
-        if (attachedNode.iamType === 'User') {
-          const userRef = attachedNode.ref as IamUser;
-          new IamUserPolicyAttachment(this, `user_policy_attach_${safeAttachId}`, {
-            user: userRef.name,
-            policyArn: policyRef.arn,
-          });
-        } else if (attachedNode.iamType === 'Group') {
-          const groupRef = attachedNode.ref as IamGroup;
-          new IamGroupPolicyAttachment(this, `group_policy_attach_${safeAttachId}`, {
-            group: groupRef.name,
-            policyArn: policyRef.arn,
-          });
-        } else if (attachedNode.iamType === 'Role') {
-          const roleRef = attachedNode.ref as IamRole;
-          new IamRolePolicyAttachment(this, `role_policy_attach_${safeAttachId}`, {
-            role: roleRef.name,
-            policyArn: policyRef.arn,
-          });
+        const attachKey = `${attachedNode.iamType}_${attachedNode.name}_${policyNode.name}`;
+        if (!createdAttachments.has(attachKey)) {
+          createdAttachments.add(attachKey);
+
+          if (attachedNode.iamType === 'User') {
+            const userRef = attachedNode.ref as IamUser;
+            new IamUserPolicyAttachment(this, `user_policy_attach_${safeAttachId}`, {
+              user: userRef.name,
+              policyArn: policyRef.arn,
+            });
+          } else if (attachedNode.iamType === 'Group') {
+            const groupRef = attachedNode.ref as IamGroup;
+            new IamGroupPolicyAttachment(this, `group_policy_attach_${safeAttachId}`, {
+              group: groupRef.name,
+              policyArn: policyRef.arn,
+            });
+          } else if (attachedNode.iamType === 'Role') {
+            const roleRef = attachedNode.ref as IamRole;
+            new IamRolePolicyAttachment(this, `role_policy_attach_${safeAttachId}`, {
+              role: roleRef.name,
+              policyArn: policyRef.arn,
+            });
+          }
         }
       }
 
@@ -389,14 +411,14 @@ class CloudForgeStack extends TerraformStack {
           const userRef = childNode.ref as IamUser;
           const groupRef = parentNode.ref as IamGroup;
           const groupName = groupRef.name;
-          const userNodeId = node.id;
+          const userName = childNode.name;
 
-          if (!userGroups.has(userNodeId)) {
-            userGroups.set(userNodeId, { userRef, userLabel: childNode.name, groupNames: [], groupRefs: [] });
+          if (!userGroups.has(userName)) {
+            userGroups.set(userName, { userRef, userLabel: userName, groupNames: [], groupRefs: [] });
           }
 
-          const groups = userGroups.get(userNodeId)!.groupNames;
-          const groupRefs = userGroups.get(userNodeId)!.groupRefs;
+          const groups = userGroups.get(userName)!.groupNames;
+          const groupRefs = userGroups.get(userName)!.groupRefs;
           if (!groups.includes(groupName)) {
             groups.push(groupName);
           }
@@ -408,8 +430,8 @@ class CloudForgeStack extends TerraformStack {
     });
 
     // Create User-Group memberships
-    userGroups.forEach((val, userNodeId) => {
-      const safeMembershipId = `membership_${userNodeId}`.replace(/[^a-zA-Z0-9]/g, '');
+    userGroups.forEach((val, userName) => {
+      const safeMembershipId = `membership_${userName}`.replace(/[^a-zA-Z0-9]/g, '');
       new IamUserGroupMembership(this, safeMembershipId, {
         user: val.userRef.name,
         groups: val.groupNames,
@@ -582,12 +604,19 @@ app.get('/api/pricing/ec2', async (req, res): Promise<any> => {
   }
 });
 
-// Fixed endpoint with strict return pathways
 app.post('/api/compile', (req, res): any => {
   const nodes: VisualNode[] = req.body.nodes;
   const edges: VisualEdge[] = req.body.edges || [];
   if (!nodes || nodes.length === 0) {
     return res.status(400).json({ error: "No nodes provided" });
+  }
+
+  if (req.body.canvasState) {
+    try {
+      fs.writeFileSync(path.join(__dirname, 'last-canvas-state.json'), JSON.stringify(req.body.canvasState, null, 2), 'utf-8');
+    } catch (e) {
+      console.error("Failed to write temporary canvas state:", e);
+    }
   }
 
   try {
@@ -985,10 +1014,20 @@ app.get('/api/deploy/stream', (req, res) => {
       }
       const recordPath = path.join(DEPLOYMENTS_DIR, `${recordId}.json`);
       const schemaCode = JSON.parse(fs.readFileSync(generatedFilePath, 'utf-8'));
+      let canvasState = null;
+      const canvasStatePath = path.join(__dirname, 'last-canvas-state.json');
+      if (fs.existsSync(canvasStatePath)) {
+        try {
+          canvasState = JSON.parse(fs.readFileSync(canvasStatePath, 'utf-8'));
+        } catch (err) {
+          console.error("Failed to read cached canvas state:", err);
+        }
+      }
       const record = {
         id: recordId,
         timestamp,
-        code: schemaCode
+        code: schemaCode,
+        canvasState: canvasState
       };
       fs.writeFileSync(recordPath, JSON.stringify(record, null, 2), 'utf-8');
 

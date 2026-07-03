@@ -1,0 +1,89 @@
+{
+  "id": "deploy-1783101303677",
+  "timestamp": 1783101303677,
+  "code": {
+    "//": {
+      "metadata": {
+        "backend": "local",
+        "stackName": "cloudforge-export",
+        "version": "0.21.0"
+      },
+      "outputs": {}
+    },
+    "provider": {
+      "aws": [
+        {
+          "region": "ap-south-1"
+        }
+      ]
+    },
+    "resource": {
+      "aws_iam_group": {
+        "iamgroup1783100246176": {
+          "//": {
+            "metadata": {
+              "path": "cloudforge-export/iamgroup1783100246176",
+              "uniqueId": "iamgroup1783100246176"
+            }
+          },
+          "name": "root"
+        },
+        "iamgroup1783100249288": {
+          "//": {
+            "metadata": {
+              "path": "cloudforge-export/iamgroup1783100249288",
+              "uniqueId": "iamgroup1783100249288"
+            }
+          },
+          "name": "executive"
+        }
+      },
+      "aws_iam_user": {
+        "iamuser1783100271094": {
+          "//": {
+            "metadata": {
+              "path": "cloudforge-export/iamuser1783100271094",
+              "uniqueId": "iamuser1783100271094"
+            }
+          },
+          "name": "bob",
+          "tags": {
+            "ManagedBy": "CloudForge"
+          }
+        }
+      },
+      "aws_iam_user_group_membership": {
+        "membershipbob": {
+          "//": {
+            "metadata": {
+              "path": "cloudforge-export/membershipbob",
+              "uniqueId": "membershipbob"
+            }
+          },
+          "depends_on": [
+            "aws_iam_group.iamgroup1783100246176",
+            "aws_iam_group.iamgroup1783100249288"
+          ],
+          "groups": [
+            "${aws_iam_group.iamgroup1783100246176.name}",
+            "${aws_iam_group.iamgroup1783100249288.name}"
+          ],
+          "user": "${aws_iam_user.iamuser1783100271094.name}"
+        }
+      }
+    },
+    "terraform": {
+      "backend": {
+        "local": {
+          "path": "/mnt/c/Users/mmona/OneDrive/Documents/Code/CloudForge/cloudforge-backend/terraform.cloudforge-export.tfstate"
+        }
+      },
+      "required_providers": {
+        "aws": {
+          "source": "hashicorp/aws",
+          "version": "5.100.0"
+        }
+      }
+    }
+  }
+}
