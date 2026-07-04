@@ -9,3 +9,8 @@ cdktf.log
 tsconfig.tsbuildinfo
 !jest.config.js
 !setup.js
+
+# Cached state & deployments
+last-canvas-state.json
+deployed-cdk.tf.json
+deployments/
