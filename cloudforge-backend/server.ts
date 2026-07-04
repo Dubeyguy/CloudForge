@@ -613,7 +613,7 @@ app.post('/api/compile', (req, res): any => {
 
   if (req.body.canvasState) {
     try {
-      fs.writeFileSync(path.join(__dirname, 'last-canvas-state.json'), JSON.stringify(req.body.canvasState, null, 2), 'utf-8');
+      fs.writeFileSync(path.join(process.cwd(), 'last-canvas-state.json'), JSON.stringify(req.body.canvasState, null, 2), 'utf-8');
     } catch (e) {
       console.error("Failed to write temporary canvas state:", e);
     }
@@ -1015,7 +1015,7 @@ app.get('/api/deploy/stream', (req, res) => {
       const recordPath = path.join(DEPLOYMENTS_DIR, `${recordId}.json`);
       const schemaCode = JSON.parse(fs.readFileSync(generatedFilePath, 'utf-8'));
       let canvasState = null;
-      const canvasStatePath = path.join(__dirname, 'last-canvas-state.json');
+      const canvasStatePath = path.join(process.cwd(), 'last-canvas-state.json');
       if (fs.existsSync(canvasStatePath)) {
         try {
           canvasState = JSON.parse(fs.readFileSync(canvasStatePath, 'utf-8'));

@@ -1478,6 +1478,7 @@ const reconstructCanvasFromCode = (code) => {
       const bucketName = config.bucket || tfId;
       const nodeId = `s3_${tfId}`;
       nameToNodeId[bucketName] = nodeId;
+      nameToNodeId[tfId] = nodeId;
       
       let versioning = false;
       if (resources.aws_s3_bucket_versioning) {
@@ -1514,12 +1515,61 @@ const reconstructCanvasFromCode = (code) => {
     });
   }
 
-  // 2. Reconstruct IAM Groups
+  // 2. Pre-process IAM Group Memberships
+  // We map: userTfId -> array of groupTfIds
+  const userGroupsMap = {};
+  if (resources.aws_iam_user_group_membership) {
+    Object.values(resources.aws_iam_user_group_membership).forEach((config) => {
+      const userRef = config.user || "";
+      let userTfId = null;
+      const userMatch = userRef.match(/\${aws_iam_user\.(.+)\.name}/);
+      if (userMatch) {
+        userTfId = userMatch[1];
+      } else {
+        const cleanUser = userRef.trim();
+        const found = Object.entries(resources.aws_iam_user || {}).find(([tfId, val]) => {
+          return tfId === cleanUser || val.name === cleanUser;
+        });
+        if (found) userTfId = found[0];
+      }
+      
+      if (!userTfId) return;
+      
+      if (!userGroupsMap[userTfId]) {
+        userGroupsMap[userTfId] = [];
+      }
+      
+      const groups = config.groups || [];
+      groups.forEach((groupRef) => {
+        let groupTfId = null;
+        const groupMatch = groupRef.match(/\${aws_iam_group\.(.+)\.name}/);
+        if (groupMatch) {
+          groupTfId = groupMatch[1];
+        } else {
+          const cleanGroup = groupRef.trim();
+          const found = Object.entries(resources.aws_iam_group || {}).find(([tfId, val]) => {
+            return tfId === cleanGroup || val.name === cleanGroup;
+          });
+          if (found) groupTfId = found[0];
+        }
+        
+        if (groupTfId && !userGroupsMap[userTfId].includes(groupTfId)) {
+          userGroupsMap[userTfId].push(groupTfId);
+        }
+      });
+    });
+  }
+
+  // 3. Reconstruct IAM Groups
+  const groupChildrenCount = {};
   if (resources.aws_iam_group) {
     Object.entries(resources.aws_iam_group).forEach(([tfId, config]) => {
       const groupName = config.name || tfId;
       const nodeId = `iam_group_${tfId}`;
       nameToNodeId[groupName] = nodeId;
+      nameToNodeId[tfId] = nodeId;
+      groupChildrenCount[tfId] = 0;
+      
       nodes.push({
         id: nodeId,
         type: "iamGroupNode",
@@ -1533,30 +1583,79 @@ const reconstructCanvasFromCode = (code) => {
     });
   }
 
-  // 3. Reconstruct IAM Users
+  // 4. Reconstruct IAM Users
   if (resources.aws_iam_user) {
     Object.entries(resources.aws_iam_user).forEach(([tfId, config]) => {
       const userName = config.name || tfId;
-      const nodeId = `iam_user_${tfId}`;
-      nameToNodeId[userName] = nodeId;
-      nodes.push({
-        id: nodeId,
-        type: "iamNode",
-        position: getNextPosition(),
-        data: {
-          label: userName,
-          iamType: "User"
-        }
-      });
+      const memberGroupTfIds = userGroupsMap[tfId] || [];
+      
+      if (memberGroupTfIds.length === 0) {
+        const nodeId = `iam_user_${tfId}`;
+        nameToNodeId[userName] = nodeId;
+        nameToNodeId[tfId] = nodeId;
+        nodes.push({
+          id: nodeId,
+          type: "iamNode",
+          position: getNextPosition(),
+          data: {
+            label: userName,
+            iamType: "User"
+          }
+        });
+      } else {
+        memberGroupTfIds.forEach((groupTfId, idx) => {
+          const groupNodeId = `iam_group_${groupTfId}`;
+          const nodeId = `iam_user_${tfId}_in_${groupTfId}`;
+          
+          // Map userName and tfId to the first instance of the user node for other references (e.g. policy attachments)
+          if (idx === 0) {
+            nameToNodeId[userName] = nodeId;
+            nameToNodeId[tfId] = nodeId;
+          }
+          
+          const childIndex = groupChildrenCount[groupTfId];
+          groupChildrenCount[groupTfId]++;
+          
+          const row = Math.floor(childIndex / 2);
+          const col = childIndex % 2;
+          const relativePos = { x: 20 + col * 240, y: 60 + row * 80 };
+          
+          nodes.push({
+            id: nodeId,
+            type: "iamNode",
+            parentId: groupNodeId,
+            position: relativePos,
+            data: {
+              label: userName,
+              iamType: "User"
+            }
+          });
+        });
+      }
     });
   }
 
-  // 4. Reconstruct IAM Roles
+  // 4.5 Adjust IAM Group Sizes based on child count
+  nodes.forEach((node) => {
+    if (node.type === "iamGroupNode") {
+      const tfId = node.id.replace("iam_group_", "");
+      const childCount = groupChildrenCount[tfId] || 0;
+      if (childCount > 0) {
+        const rows = Math.ceil(childCount / 2);
+        const minHeight = 60 + rows * 80 + 20;
+        const minWidth = childCount > 1 ? 500 : 280;
+        node.style = { width: minWidth, height: minHeight };
+      }
+    }
+  });
+
+  // 5. Reconstruct IAM Roles
   if (resources.aws_iam_role) {
     Object.entries(resources.aws_iam_role).forEach(([tfId, config]) => {
       const roleName = config.name || tfId;
       const nodeId = `iam_role_${tfId}`;
       nameToNodeId[roleName] = nodeId;
+      nameToNodeId[tfId] = nodeId;
       nodes.push({
         id: nodeId,
         type: "iamNode",
@@ -1569,12 +1668,13 @@ const reconstructCanvasFromCode = (code) => {
     });
   }
 
-  // 5. Reconstruct IAM Policies
+  // 6. Reconstruct IAM Policies
   if (resources.aws_iam_policy) {
     Object.entries(resources.aws_iam_policy).forEach(([tfId, config]) => {
       const policyName = config.name || tfId;
       const nodeId = `iam_policy_${tfId}`;
       nameToNodeId[policyName] = nodeId;
+      nameToNodeId[tfId] = nodeId;
       arnToNodeId[`\${aws_iam_policy.${tfId}.arn}`] = nodeId;
       nodes.push({
         id: nodeId,
@@ -1588,12 +1688,13 @@ const reconstructCanvasFromCode = (code) => {
     });
   }
 
-  // 6. Reconstruct EC2 Instances
+  // 7. Reconstruct EC2 Instances
   if (resources.aws_instance) {
     Object.entries(resources.aws_instance).forEach(([tfId, config]) => {
       const instanceName = config.tags?.Name || tfId;
       const nodeId = `ec2_${tfId}`;
       nameToNodeId[instanceName] = nodeId;
+      nameToNodeId[tfId] = nodeId;
       nodes.push({
         id: nodeId,
         type: "ec2Node",
@@ -1609,32 +1710,7 @@ const reconstructCanvasFromCode = (code) => {
     });
   }
 
-  // 7. Reconstruct Group Memberships (Edges)
-  if (resources.aws_iam_user_group_membership) {
-    Object.values(resources.aws_iam_user_group_membership).forEach((config) => {
-      const user = config.user;
-      const groups = config.groups || [];
-      
-      const cleanUser = user.replace(/\${aws_iam_user\.(.+)\.name}/, '$1');
-      const userNodeId = nameToNodeId[cleanUser] || Object.values(nameToNodeId).find((id) => id.includes(cleanUser));
-
-      groups.forEach((group) => {
-        const cleanGroup = group.replace(/\${aws_iam_group\.(.+)\.name}/, '$1');
-        const groupNodeId = nameToNodeId[cleanGroup] || Object.values(nameToNodeId).find((id) => id.includes(cleanGroup));
-        
-        if (userNodeId && groupNodeId) {
-          edges.push({
-            id: `e_mem_${userNodeId}_${groupNodeId}`,
-            source: userNodeId,
-            target: groupNodeId,
-            sourceHandle: "right",
-            targetHandle: "left",
-            style: { strokeWidth: 2, stroke: "#94a3b8" }
-          });
-        }
-      });
-    });
-  }
+  // Note: We completely skip the group membership edges recreation because visual nesting replaces it.
 
   // 8. Reconstruct Policy Attachments (Edges)
   if (resources.aws_iam_user_policy_attachment) {
@@ -1704,7 +1780,7 @@ const reconstructCanvasFromCode = (code) => {
   }
 
   return { nodes, edges };
-};
+}
 
 // ==========================================
 // 3. MAIN APP: The Floating Editor
@@ -5568,15 +5644,15 @@ function CloudForgeEditor({
                   </div>
                 </div>
               ) : (
-                <div className="p-4 border-t border-zinc-800 bg-zinc-900/30 flex justify-between items-center">
-                  <div className="flex items-center gap-2 text-zinc-400 text-[11px] font-mono">
+                <div className="p-4 border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30 flex justify-between items-center">
+                  <div className="flex items-center gap-2 text-slate-550 dark:text-zinc-400 text-[11px] font-mono">
                     {isDeploying ? (
-                      <span className="flex items-center gap-2 text-amber-500 font-bold">
+                      <span className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-bold">
                         <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
                         {terminalMode === "deploy" ? "Running Terraform commands..." : "Tearing down infrastructure..."}
                       </span>
                     ) : (
-                      <span className="flex items-center gap-2 text-emerald-500 font-bold">
+                      <span className="flex items-center gap-2 text-emerald-600 dark:text-emerald-500 font-bold">
                         <CheckCircle2 size={14} />
                         Process exited.
                       </span>
@@ -5586,13 +5662,13 @@ function CloudForgeEditor({
                     <button
                       onClick={() => setModalView("code")}
                       disabled={isDeploying}
-                      className="flex items-center gap-1.5 px-4 h-10 text-xs font-bold rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      className="flex items-center gap-1.5 px-4 h-10 text-xs font-bold rounded-xl border shadow-sm bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-300 dark:border-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                       <ArrowLeft size={14} /> Back to Code
                     </button>
                     <button
                       onClick={handleCloseModal}
-                      className="flex items-center gap-1.5 px-5 h-10 text-xs font-bold rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 shadow-md"
+                      className="flex items-center gap-1.5 px-5 h-10 text-xs font-bold rounded-xl bg-slate-900 dark:bg-zinc-850 hover:bg-slate-800 dark:hover:bg-zinc-850/80 text-white dark:text-zinc-100 border border-slate-950 dark:border-zinc-800 shadow-md transition-all active:scale-95"
                     >
                       Close Console
                     </button>
