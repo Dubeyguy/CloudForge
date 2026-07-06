@@ -188,3 +188,135 @@ html, body, #root {
   --xy-connectionline-stroke-width-default: 2;
   background-color: #1B2727;
 }
+
+/* Custom Animations for Premium Modals and UI Elements */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes bounceSubtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scale-up {
+  animation: scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-bounce-subtle {
+  animation: bounceSubtle 2s ease-in-out infinite;
+}
+
+/* Active Mode Accent Color Overrides */
+
+/* --- AUDIT MODE (Indigo) --- */
+.mode-audit .deployments-modal .text-amber-500,
+.mode-audit .deployments-modal .text-amber-600,
+.mode-audit .deployments-modal .text-amber-700,
+.mode-audit .deployments-modal .hover\:text-amber-500:hover,
+.mode-audit .deployments-modal .hover\:text-amber-600:hover,
+.mode-audit .project-dropdown .text-amber-500,
+.mode-audit .project-dropdown .text-amber-600,
+.mode-audit .settings-modal .text-amber-500,
+.mode-audit .settings-modal .text-amber-600 {
+  color: #6366f1 !important; /* Indigo 500 */
+}
+
+.mode-audit .deployments-modal .bg-amber-500,
+.mode-audit .settings-modal .bg-amber-500 {
+  background-color: #4f46e5 !important; /* Indigo 600 */
+}
+.mode-audit .deployments-modal .hover\:bg-amber-400:hover,
+.mode-audit .settings-modal .hover\:bg-amber-400:hover {
+  background-color: #6366f1 !important; /* Indigo 500 */
+}
+.mode-audit .deployments-modal .bg-amber-100\/50 {
+  background-color: rgba(224, 231, 255, 0.5) !important;
+}
+.mode-audit .deployments-modal .dark\:bg-amber-500\/10 {
+  background-color: rgba(99, 102, 241, 0.1) !important;
+}
+.mode-audit .deployments-modal .border-amber-300 {
+  border-color: #a5b4fc !important;
+}
+.mode-audit .deployments-modal .dark\:border-amber-500\/30 {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+.mode-audit .settings-modal .accent-amber-500,
+.mode-audit input[type="range"] {
+  accent-color: #4f46e5 !important;
+}
+.mode-audit input:focus,
+.mode-audit select:focus,
+.mode-audit textarea:focus,
+.mode-audit .focus\:border-amber-500:focus {
+  border-color: #4f46e5 !important;
+}
+.mode-audit .focus\:ring-amber-500:focus {
+  --tw-ring-color: rgba(79, 70, 229, 0.2) !important;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2) !important;
+}
+.mode-audit pre::selection, .mode-audit pre *::selection {
+  background-color: rgba(99, 102, 241, 0.2) !important;
+}
+
+/* --- BUDGETS MODE (Emerald) --- */
+.mode-budgets .deployments-modal .text-amber-500,
+.mode-budgets .deployments-modal .text-amber-600,
+.mode-budgets .deployments-modal .text-amber-700,
+.mode-budgets .deployments-modal .hover\:text-amber-500:hover,
+.mode-budgets .deployments-modal .hover\:text-amber-600:hover,
+.mode-budgets .project-dropdown .text-amber-500,
+.mode-budgets .project-dropdown .text-amber-600,
+.mode-budgets .settings-modal .text-amber-500,
+.mode-budgets .settings-modal .text-amber-600 {
+  color: #10b981 !important; /* Emerald 500 */
+}
+
+.mode-budgets .deployments-modal .bg-amber-500,
+.mode-budgets .settings-modal .bg-amber-500 {
+  background-color: #059669 !important; /* Emerald 600 */
+}
+.mode-budgets .deployments-modal .hover\:bg-amber-400:hover,
+.mode-budgets .settings-modal .hover\:bg-amber-400:hover {
+  background-color: #10b981 !important; /* Emerald 500 */
+}
+.mode-budgets .deployments-modal .bg-amber-100\/50 {
+  background-color: rgba(209, 250, 229, 0.5) !important;
+}
+.mode-budgets .deployments-modal .dark\:bg-amber-500\/10 {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+}
+.mode-budgets .deployments-modal .border-amber-300 {
+  border-color: #6ee7b7 !important;
+}
+.mode-budgets .deployments-modal .dark\:border-amber-500\/30 {
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+.mode-budgets .settings-modal .accent-amber-500,
+.mode-budgets input[type="range"] {
+  accent-color: #059669 !important;
+}
+.mode-budgets input:focus,
+.mode-budgets select:focus,
+.mode-budgets textarea:focus,
+.mode-budgets .focus\:border-amber-500:focus {
+  border-color: #059669 !important;
+}
+.mode-budgets .focus\:ring-amber-500:focus {
+  --tw-ring-color: rgba(5, 150, 105, 0.2) !important;
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2) !important;
+}
+.mode-budgets pre::selection, .mode-budgets pre *::selection {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+}

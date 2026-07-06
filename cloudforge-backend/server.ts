@@ -1120,6 +1120,31 @@ app.post('/api/deployments/redeploy', (req, res) => {
   }
 });
 
+app.put('/api/deployments/:id', (req, res) => {
+  const { id } = req.params;
+  const { name } = req.body;
+
+  if (!name || typeof name !== 'string') {
+    res.status(400).json({ error: "Name is required and must be a string" });
+    return;
+  }
+
+  const recordPath = path.join(DEPLOYMENTS_DIR, `${id}.json`);
+  if (!fs.existsSync(recordPath)) {
+    res.status(404).json({ error: "Deployment not found" });
+    return;
+  }
+
+  try {
+    const record = JSON.parse(fs.readFileSync(recordPath, 'utf-8'));
+    record.name = name;
+    fs.writeFileSync(recordPath, JSON.stringify(record, null, 2), 'utf-8');
+    res.json({ success: true, deployment: record });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update deployment name", details: String(err) });
+  }
+});
+
 app.delete('/api/deployments', (_req, res) => {
   try {
     if (fs.existsSync(DEPLOYMENTS_DIR)) {
