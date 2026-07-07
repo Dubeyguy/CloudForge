@@ -1,0 +1,147 @@
+Created At: 2026-07-07T09:33:46Z
+Completed At: 2026-07-07T09:33:51Z
+
+				The command completed successfully.
+				Output:
+				warning: in the working copy of 'src/components/CloudForgeEditor.jsx', LF will be replaced by CRLF the next time Git touches it
+diff --git a/src/components/CloudForgeEditor.jsx b/src/components/CloudForgeEditor.jsx
+index eeed04a..bffd0a8 100644
+--- a/src/components/CloudForgeEditor.jsx
++++ b/src/components/CloudForgeEditor.jsx
+@@ -783,6 +783,7 @@ export default function CloudForgeEditor({
+     shapes: false,
+   });
+   const [searchQuery, setSearchQuery] = useState("");
++  const [nodePaletteSearch, setNodePaletteSearch] = useState("");
+   const [isSearchFocused, setIsSearchFocused] = useState(false);
+   const [searchActiveIndex, setSearchActiveIndex] = useState(-1);
+ 
+@@ -2648,6 +2649,127 @@ export default function CloudForgeEditor({
+     }
+   };
+ 
++  const sidebarItems = useMemo(() => [
++    {
++      id: "s3Node",
++      label: "S3 Bucket",
++      category: "aws",
++      icon: <Database size={14} />,
++      iconBgClass: "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20",
++      action: addNewS3Node,
++      dragType: "s3Node",
++      dragLabelType: null,
++    },
++    {
++      id: "s3ObjectNode",
++      label: "S3 Object",
++      category: "aws",
++      icon: <File size={14} />,
++      iconBgClass: "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20",
++      action: addNewS3ObjectNode,
++      dragType: "s3ObjectNode",
++      dragLabelType: null,
++    },
++    {
++      id: "ec2Node",
++      label: "EC2 Instance",
++      category: "compute",
++      icon: <Cpu size={14} />,
++      iconBgClass: "bg-sky-100 dark:bg-sky-500/10 text-sky-600 dark:text-sky-500 border border-sky-200 dark:border-sky-500/20",
++      action: addNewEC2Node,
++      dragType: "ec2Node",
++      dragLabelType: null,
++    },
++    {
++      id: "iamUser",
++      label: "IAM User",
++      category: "iam",
++      icon: <User size={14} />,
++      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
++      action: () => addNewIAMNode("User"),
++      dragType: "iamNode",
++      dragLabelType: "User",
++    },
++    {
++      id: "iamGroup",
++      label: "IAM Group",
++      category: "iam",
++      icon: <Users size={14} />,
++      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
++      action: () => addNewIAMNode("Group"),
++      dragType: "iamGroupNode",
++      dragLabelType: "Group",
++    },
++    {
++      id: "iamRole",
++      label: "IAM Role",
++      category: "iam",
++      icon: <Shield size={14} />,
++      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
++      action: () => addNewIAMNode("Role"),
++      dragType: "iamNode",
++      dragLabelType: "Role",
++    },
++    {
++      id: "iamPolicy",
++      label: "IAM Policy",
++      category: "iam",
++      icon: <Key size={14} />,
++      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
++      action: () => addNewIAMNode("Policy"),
++      dragType: "iamNode",
++      dragLabelType: "Policy",
++    },
++    {
++      id: "shapeRectangle",
++      label: "Rectangle Group",
++      category: "shapes",
++      icon: <Square size={14} />,
++      iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
++      action: () => addNewShape("Rectangle"),
++      dragType: "shapeNode",
++      dragLabelType: "Rectangle",
++    },
++    {
++      id: "shapeCircle",
++      label: "Circle Group",
++      category: "shapes",
++      icon: <CircleIcon size={14} />,
++      iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
++      action: () => addNewShape("Circle"),
++      dragType: "shapeNode",
++      dragLabelType: "Circle",
++    },
++    {
++      id: "shapeText",
++      label: "Text Label",
++      category: "shapes",
++      icon: <Type size={14} />,
++      iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
++      action: () => addNewShape("Text"),
++      dragType: "shapeNode",
++      dragLabelType: "Text",
++    }
++  ], [addNewS3Node, addNewS3ObjectNode, addNewEC2Node, addNewIAMNode, addNewShape]);
++
++  const categories = useMemo(() => [
++    { id: "aws", label: "Storage" },
++    { id: "compute", label: "Compute" },
++    { id: "iam", label: "IAM" },
++    { id: "shapes", label: "Shapes & Groups" }
++  ], []);
++
++  const filteredCategories = useMemo(() => {
++    return categories.map((cat) => {
++      const items = sidebarItems.filter(
++        (item) =>
++          item.category === cat.id &&
++          item.label.toLowerCase().includes(nodePaletteSearch.toLowerCase())
++      );
++      return { ...cat, items };
++    }).filter((cat) => cat.items.length > 0);
++  }, [categories, sidebarItems, nodePaletteSearch]);
++
+   return (
+     <ModeContext.Provider value={activeMode}>
+       <div className={`h-screen w-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-300 font-sans antialiased select-none overflow-hidden relative transition-colors duration-300 mode-${activeMode}`}>
+

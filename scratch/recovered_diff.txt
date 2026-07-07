@@ -1,0 +1,41 @@
+Created At: 2026-07-07T11:34:28Z
+Completed At: 2026-07-07T11:34:30Z
+
+				The command completed successfully.
+				Output:
+				diff --git a/src/components/CloudForgeEditor.jsx b/src/components/CloudForgeEditor.jsx
+index eeed04a..53775d4 100644
+--- a/src/components/CloudForgeEditor.jsx
++++ b/src/components/CloudForgeEditor.jsx
+@@ -21,7 +21,7 @@ import {
+   Activity, FolderOpen, Plus, AlertTriangle, FolderPlus, ArrowLeft, Clock, Settings, Moon, Sun,
+   Sparkles, Save, Search, Square, Circle as CircleIcon, Type, Undo, Redo, User, Users, Key,
+   Shield, Coins, Maximize2, Edit, File, Folder, Upload, Server, History, Cpu, ArrowUpRight,
+-  ArrowUpDown, Edit3
++  ArrowUpDown, Edit3, Keyboard, BookOpen
+ } from "lucide-react";
+ import { CustomSelect, RegionSelect, STANDARD_REGIONS } from "./CustomSelect";
+ import { nodeTypes, ModeContext, AuditBadge } from "./CustomNodes";
+@@ -723,6 +723,7 @@ export default function CloudForgeEditor({
+     }
+   }, [livePricing]);
+   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
++  const [isDocsOpen, setIsDocsOpen] = useState(false);
+   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+ 
+@@ -2965,6 +2966,13 @@ export default function CloudForgeEditor({
+             >
+               <History size={18} />
+             </button>
++            <button
++              onClick={() => setIsDocsOpen(true)}
++              className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
++              title="Documentations"
++            >
++              <BookOpen size={18} />
++            </button>
+             <button
+               onClick={() => setIsSettingsOpen(true)}
+               className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
+

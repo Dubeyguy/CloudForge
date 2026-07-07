@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 export const ModeContext = React.createContext("dev");
+export const SettingsContext = React.createContext({ theme: "dark", nodeOverlayZoomedOut: true });
 
 export const AuditBadge = ({ data }) => {
   const activeMode = React.useContext(ModeContext);
@@ -60,7 +61,8 @@ export const AuditBadge = ({ data }) => {
 
 export const ZoomedOutOverlay = ({ type, name, colorClass = "bg-amber-500", borderClass = "border-amber-500", isCard = false, circle = false }) => {
   const zoom = useStore((s) => s.transform[2]);
-  const isZoomedOut = zoom < 0.65;
+  const settings = React.useContext(SettingsContext);
+  const isZoomedOut = zoom < 0.65 && settings?.nodeOverlayZoomedOut !== false;
 
   if (!isZoomedOut) return null;
 
@@ -73,7 +75,7 @@ export const ZoomedOutOverlay = ({ type, name, colorClass = "bg-amber-500", bord
   if (isCard) {
     return (
       <div
-        className={`absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-white dark:bg-zinc-955 border border-dashed ${borderClass} z-50 pointer-events-none select-none text-center rounded-xl p-2.5 animate-fade-in`}
+        className={`absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-white dark:bg-zinc-950 border border-dashed ${borderClass} z-50 pointer-events-none select-none text-center rounded-xl p-2.5 animate-fade-in`}
       >
         <span className={`text-[14px] font-black uppercase tracking-widest ${textColorClass} shrink-0`}>
           {type}
@@ -87,7 +89,7 @@ export const ZoomedOutOverlay = ({ type, name, colorClass = "bg-amber-500", bord
 
   return (
     <div
-      className={`absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-zinc-955 border-4 border-dashed ${borderClass} z-50 pointer-events-none select-none text-center p-5 transition-all duration-300 ${circle ? "rounded-full" : "rounded-3xl"
+      className={`absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-zinc-950 border-4 border-dashed ${borderClass} z-50 pointer-events-none select-none text-center p-5 transition-all duration-300 ${circle ? "rounded-full" : "rounded-3xl"
         } gap-1`}
     >
       <span className={`text-[22px] font-black uppercase tracking-widest ${textColorClass} shrink-0`}>
@@ -270,7 +272,8 @@ export const S3Node = ({ id, data, selected }) => {
 export const S3ObjectNode = ({ data, id }) => {
   const parentId = useStore((s) => s.nodes.find((n) => n.id === id)?.parentId);
   const zoom = useStore((s) => s.transform[2]);
-  const isZoomedOut = zoom < 0.65;
+  const settings = React.useContext(SettingsContext);
+  const isZoomedOut = zoom < 0.65 && settings?.nodeOverlayZoomedOut !== false;
 
   if (isZoomedOut && parentId) return null;
 
@@ -314,7 +317,8 @@ export const S3ObjectNode = ({ data, id }) => {
 export const IAMNode = ({ data, id }) => {
   const parentId = useStore((s) => s.nodes.find((n) => n.id === id)?.parentId);
   const zoom = useStore((s) => s.transform[2]);
-  const isZoomedOut = zoom < 0.65;
+  const settings = React.useContext(SettingsContext);
+  const isZoomedOut = zoom < 0.65 && settings?.nodeOverlayZoomedOut !== false;
 
   if (isZoomedOut && parentId) return null;
 

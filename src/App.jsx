@@ -16,6 +16,9 @@ export default function App() {
     theme: "dark",
     autoSave: true,
     defaultRegion: "us-east-1",
+    showMinimap: true,
+    fontSize: "medium",
+    nodeOverlayZoomedOut: true,
   });
 
   useEffect(() => {
@@ -26,6 +29,16 @@ export default function App() {
       document.documentElement.classList.add("forest");
     }
   }, [userSettings.theme]);
+
+  useEffect(() => {
+    if (userSettings.fontSize === "small") {
+      document.documentElement.style.fontSize = "14px";
+    } else if (userSettings.fontSize === "large") {
+      document.documentElement.style.fontSize = "18px";
+    } else {
+      document.documentElement.style.fontSize = "16px";
+    }
+  }, [userSettings.fontSize]);
 
   const fetchProjectsAndSettings = useCallback(async () => {
     try {
@@ -47,7 +60,9 @@ export default function App() {
 
   useEffect(() => {
     const savedSettings = localStorage.getItem("cloudforge_settings");
-    if (savedSettings) setUserSettings(JSON.parse(savedSettings));
+    if (savedSettings) {
+      setUserSettings((prev) => ({ ...prev, ...JSON.parse(savedSettings) }));
+    }
   }, []);
 
   const updateSettings = (key, value) => {

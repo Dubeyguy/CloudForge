@@ -95,7 +95,7 @@ export const ProjectsDashboard = ({
   };
 
   return (
-    <div className={`min-h-screen w-screen bg-slate-50 dark:bg-zinc-955 text-slate-800 dark:text-zinc-100 flex flex-col p-8 transition-colors duration-300 font-sans antialiased overflow-y-auto ${userSettings.theme === "forest" ? "forest" : ""}`}>
+    <div className={`min-h-screen w-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-100 flex flex-col p-8 transition-colors duration-300 font-sans antialiased overflow-y-auto ${userSettings.theme === "forest" ? "forest" : ""}`}>
       <input
         type="file"
         ref={fileInputRef}

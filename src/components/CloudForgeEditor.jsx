@@ -14,6 +14,7 @@ import {
   reconnectEdge,
   useStore,
   applyNodeChanges,
+  MiniMap,
 } from "@xyflow/react";
 import {
   Play, Download, Code, Layers, Terminal, Trash2, Settings2, X, CheckCircle2, Check, Database,
@@ -21,10 +22,10 @@ import {
   Activity, FolderOpen, Plus, AlertTriangle, FolderPlus, ArrowLeft, Clock, Settings, Moon, Sun,
   Sparkles, Save, Search, Square, Circle as CircleIcon, Type, Undo, Redo, User, Users, Key,
   Shield, Coins, Maximize2, Edit, File, Folder, Upload, Server, History, Cpu, ArrowUpRight,
-  ArrowUpDown, Edit3
+  ArrowUpDown, Edit3, Keyboard, BookOpen
 } from "lucide-react";
 import { CustomSelect, RegionSelect, STANDARD_REGIONS } from "./CustomSelect";
-import { nodeTypes, ModeContext, AuditBadge } from "./CustomNodes";
+import { nodeTypes, ModeContext, SettingsContext, AuditBadge } from "./CustomNodes";
 import { ALL_INSTANCE_TYPES, REGIONAL_MULTIPLIERS, OS_IMAGES, calculateEC2Cost } from "./EC2PricingDb";
 
 const reconstructCanvasFromCode = (code) => {
@@ -723,6 +724,8 @@ export default function CloudForgeEditor({
     }
   }, [livePricing]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState("appearance");
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
@@ -783,6 +786,9 @@ export default function CloudForgeEditor({
     shapes: false,
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [nodePaletteSearch, setNodePaletteSearch] = useState("");
+  const searchInputRef = useRef(null);
+  const mainSearchInputRef = useRef(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchActiveIndex, setSearchActiveIndex] = useState(-1);
 
@@ -829,7 +835,20 @@ export default function CloudForgeEditor({
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
+      const isInput = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName);
+      
+      // Ctrl + / -> Focus main search input (globally accessible)
+      if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+        e.preventDefault();
+        setTimeout(() => {
+          mainSearchInputRef.current?.focus();
+          mainSearchInputRef.current?.select();
+        }, 50);
+        return;
+      }
+
+      if (isInput) return;
+
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
         e.preventDefault();
         if (e.shiftKey) redo();
@@ -837,11 +856,23 @@ export default function CloudForgeEditor({
       } else if ((e.ctrlKey || e.metaKey) && e.key === "y") {
         e.preventDefault();
         redo();
+      } else if (e.shiftKey && e.key === "Tab") {
+        // Shift + Tab -> Toggle Nodes Panel
+        e.preventDefault();
+        setIsLeftPanelOpen((prev) => !prev);
+      } else if (!e.shiftKey && e.key === "Tab") {
+        // Tab -> Cycle between modes
+        e.preventDefault();
+        setActiveMode((prev) => {
+          if (prev === "dev") return "audit";
+          if (prev === "audit") return "budgets";
+          return "dev";
+        });
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, setIsLeftPanelOpen, setActiveMode]);
 
   useEffect(() => {
     if (!userSettings.autoSave) return;
@@ -2648,8 +2679,213 @@ export default function CloudForgeEditor({
     }
   };
 
+  const sidebarItems = useMemo(() => [
+    {
+      id: "s3Node",
+      label: "S3 Bucket",
+      category: "aws",
+      icon: <Database size={14} />,
+      iconBgClass: "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20",
+      action: addNewS3Node,
+      dragType: "s3Node",
+      dragLabelType: null,
+    },
+    {
+      id: "s3ObjectNode",
+      label: "S3 Object",
+      category: "aws",
+      icon: <File size={14} />,
+      iconBgClass: "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20",
+      action: addNewS3ObjectNode,
+      dragType: "s3ObjectNode",
+      dragLabelType: null,
+    },
+    {
+      id: "ec2Node",
+      label: "EC2 Instance",
+      category: "compute",
+      icon: <Cpu size={14} />,
+      iconBgClass: "bg-sky-100 dark:bg-sky-500/10 text-sky-600 dark:text-sky-500 border border-sky-200 dark:border-sky-500/20",
+      action: addNewEC2Node,
+      dragType: "ec2Node",
+      dragLabelType: null,
+    },
+    {
+      id: "iamUser",
+      label: "IAM User",
+      category: "iam",
+      icon: <User size={14} />,
+      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
+      action: () => addNewIAMNode("User"),
+      dragType: "iamNode",
+      dragLabelType: "User",
+    },
+    {
+      id: "iamGroup",
+      label: "IAM Group",
+      category: "iam",
+      icon: <Users size={14} />,
+      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
+      action: () => addNewIAMNode("Group"),
+      dragType: "iamGroupNode",
+      dragLabelType: "Group",
+    },
+    {
+      id: "iamRole",
+      label: "IAM Role",
+      category: "iam",
+      icon: <Shield size={14} />,
+      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
+      action: () => addNewIAMNode("Role"),
+      dragType: "iamNode",
+      dragLabelType: "Role",
+    },
+    {
+      id: "iamPolicy",
+      label: "IAM Policy",
+      category: "iam",
+      icon: <Key size={14} />,
+      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
+      action: () => addNewIAMNode("Policy"),
+      dragType: "iamNode",
+      dragLabelType: "Policy",
+    },
+    {
+      id: "shapeRectangle",
+      label: "Rectangle Group",
+      category: "shapes",
+      icon: <Square size={14} />,
+      iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
+      action: () => addNewShape("Rectangle"),
+      dragType: "shapeNode",
+      dragLabelType: "Rectangle",
+    },
+    {
+      id: "shapeCircle",
+      label: "Circle Group",
+      category: "shapes",
+      icon: <CircleIcon size={14} />,
+      iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
+      action: () => addNewShape("Circle"),
+      dragType: "shapeNode",
+      dragLabelType: "Circle",
+    },
+    {
+      id: "shapeText",
+      label: "Text Label",
+      category: "shapes",
+      icon: <Type size={14} />,
+      iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
+      action: () => addNewShape("Text"),
+      dragType: "shapeNode",
+      dragLabelType: "Text",
+    }
+  ], [addNewS3Node, addNewS3ObjectNode, addNewEC2Node, addNewIAMNode, addNewShape]);
+
+  const categories = useMemo(() => [
+    { id: "aws", label: "Storage" },
+    { id: "compute", label: "Compute" },
+    { id: "iam", label: "IAM" },
+    { id: "shapes", label: "Shapes & Groups" }
+  ], []);
+
+  const filteredCategories = useMemo(() => {
+    const query = nodePaletteSearch.toLowerCase().trim();
+
+    // Helper to compare two nodes
+    const compareNodes = (a, b) => {
+      if (!query) return 0; // Keep original order if query is empty
+
+      const labelA = a.label.toLowerCase();
+      const labelB = b.label.toLowerCase();
+
+      const startsWithA = labelA.startsWith(query);
+      const startsWithB = labelB.startsWith(query);
+
+      if (startsWithA && !startsWithB) return -1;
+      if (!startsWithA && startsWithB) return 1;
+
+      // If both start with the query, or both don't start with it, sort alphabetically
+      return a.label.localeCompare(b.label);
+    };
+
+    // Map categories, filter items, and sort items inside each category
+    const mapped = categories.map((cat) => {
+      const items = sidebarItems.filter(
+        (item) =>
+          item.category === cat.id &&
+          item.label.toLowerCase().includes(query)
+      );
+
+      // Sort items inside this category
+      const sortedItems = [...items].sort(compareNodes);
+
+      return { ...cat, items: sortedItems };
+    }).filter((cat) => cat.items.length > 0);
+
+    // If query is active, sort categories by their best (first) item
+    if (query) {
+      mapped.sort((catA, catB) => {
+        const bestA = catA.items[0];
+        const bestB = catB.items[0];
+        return compareNodes(bestA, bestB);
+      });
+    }
+
+    return mapped;
+  }, [categories, sidebarItems, nodePaletteSearch]);
+
+  const isRightPanelOpen = !!selectedNode || (activeMode === "audit" && !isAuditLegendCollapsed);
+
+  const minimapStyle = useMemo(() => {
+    const isDark = userSettings.theme === "dark";
+    const isForest = userSettings.theme === "forest";
+    const showAuditBadge = activeMode === "audit" && !selectedNode && isAuditLegendCollapsed;
+
+    let backgroundColor = "rgba(255, 255, 255, 0.85)";
+    let borderColor = "#e2e8f0";
+
+    if (isDark) {
+      backgroundColor = "rgba(9, 9, 11, 0.8)";
+      borderColor = "#27272a";
+    } else if (isForest) {
+      backgroundColor = "rgba(16, 28, 23, 0.8)";
+      borderColor = "#2C3E35";
+    }
+
+    return {
+      right: isRightPanelOpen ? 368 : 24,
+      bottom: showAuditBadge ? 80 : 24,
+      margin: 0,
+      width: 140,
+      height: 100,
+      backgroundColor,
+      border: `1px solid ${borderColor}`,
+      borderRadius: "16px",
+      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
+      transition: "right 0.3s ease-in-out, bottom 0.3s ease-in-out, background-color 0.3s, border-color 0.3s",
+    };
+  }, [userSettings.theme, isRightPanelOpen, activeMode, selectedNode, isAuditLegendCollapsed]);
+
+  const minimapNodeColor = useCallback((node) => {
+    if (node.type === "s3Node" || node.type === "s3ObjectNode") return "#f59e0b"; // amber
+    if (node.type === "ec2Node") return "#0ea5e9"; // sky
+    if (node.type === "iamNode" || node.type === "iamGroupNode") return "#8b5cf6"; // violet
+    if (node.type === "shapeNode") return "#3b82f6"; // blue
+    return userSettings.theme === "light" ? "#e2e8f0" : "#27272a";
+  }, [userSettings.theme]);
+
+  const minimapMaskColor = useMemo(() => {
+    if (userSettings.theme === "dark") return "rgba(255, 255, 255, 0.04)";
+    if (userSettings.theme === "forest") return "rgba(255, 255, 255, 0.03)";
+    return "rgba(0, 0, 0, 0.06)";
+  }, [userSettings.theme]);
+
   return (
     <ModeContext.Provider value={activeMode}>
+      <SettingsContext.Provider value={userSettings}>
       <div className={`h-screen w-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-300 font-sans antialiased select-none overflow-hidden relative transition-colors duration-300 mode-${activeMode}`}>
         {/* CANVAS ENGINE */}
         <main ref={reactFlowWrapper} className="absolute inset-0 z-0">
@@ -2686,6 +2922,17 @@ export default function CloudForgeEditor({
               gap={24}
               size={1.5}
             />
+            {userSettings.showMinimap && (
+              <MiniMap
+                position="bottom-right"
+                style={minimapStyle}
+                nodeColor={minimapNodeColor}
+                nodeBorderRadius={4}
+                maskColor={minimapMaskColor}
+                maskStrokeColor={userSettings.theme === "light" ? "rgba(0, 0, 0, 0.15)" : "rgba(255, 255, 255, 0.15)"}
+                maskStrokeWidth={1.5}
+              />
+            )}
           </ReactFlow>
         </main>
 
@@ -2795,7 +3042,7 @@ export default function CloudForgeEditor({
                       setIsProjectDropdownOpen(false);
                       onOpenProjectsDashboard();
                     }}
-                    className="absolute top-3.5 right-3.5 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-850 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 transition-colors"
+                    className="absolute top-3.5 right-3.5 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 transition-colors"
                     title="Fullscreen Projects Dashboard"
                   >
                     <Maximize2 size={13} />
@@ -2845,6 +3092,7 @@ export default function CloudForgeEditor({
                 <Search size={16} className="text-slate-400 dark:text-zinc-500" />
               </div>
               <input
+                ref={mainSearchInputRef}
                 type="text"
                 placeholder="Search components..."
                 value={searchQuery}
@@ -2966,6 +3214,13 @@ export default function CloudForgeEditor({
               <History size={18} />
             </button>
             <button
+              onClick={() => setIsDocsOpen(true)}
+              className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
+              title="Documentations"
+            >
+              <BookOpen size={18} />
+            </button>
+            <button
               onClick={() => setIsSettingsOpen(true)}
               className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
             >
@@ -2991,264 +3246,94 @@ export default function CloudForgeEditor({
         <aside
           className={`absolute top-24 bottom-6 z-30 overflow-hidden transition-all duration-300 ease-in-out border border-slate-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl flex flex-col rounded-2xl shadow-xl dark:shadow-2xl ${isLeftPanelOpen ? "left-6 w-72 translate-x-0 pointer-events-auto" : "left-0 w-0 -translate-x-full opacity-0 pointer-events-none"}`}
         >
-          <div className="flex flex-col w-72 h-full overflow-y-auto custom-scrollbar p-3">
-            {/* CATEGORY: AWS RESOURCES */}
-            <div className="flex flex-col gap-1 mb-2">
-              <button
-                onClick={() => toggleCategory("aws")}
-                className="flex items-center gap-2 px-2 py-2 w-full hover:bg-slate-100 dark:hover:bg-zinc-800/50 rounded-lg transition-colors text-left group"
-              >
-                <ChevronRight
-                  size={14}
-                  className={`text-slate-400 dark:text-zinc-500 transition-transform duration-200 ${expandedCategories.aws ? "rotate-90" : ""}`}
+          <div className="flex flex-col w-72 h-full overflow-hidden">
+            {/* SEARCH INPUT BAR */}
+            <div className="p-3 border-b border-slate-100 dark:border-zinc-900/50">
+              <div className="relative">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search nodes..."
+                  value={nodePaletteSearch}
+                  onChange={(e) => setNodePaletteSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800/80 rounded-xl text-xs text-slate-800 dark:text-zinc-200 placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
                 />
-                <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider group-hover:text-slate-900 dark:group-hover:text-zinc-200 transition-colors">
-                  Storage
-                </span>
-              </button>
-              <div
-                className={`flex flex-col gap-2 overflow-hidden transition-all duration-300 ease-in-out origin-top ${expandedCategories.aws ? "max-h-96 opacity-100 scale-y-100 mt-1" : "max-h-0 opacity-0 scale-y-0"}`}
-              >
-                <div className="pl-6 pr-2 pb-1 flex flex-col gap-2">
+                <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-zinc-500" size={13} />
+                {nodePaletteSearch && (
                   <button
-                    onClick={addNewS3Node}
-                    draggable={true}
-                    onDragStart={(e) => onDragStart(e, "s3Node")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
+                    onClick={() => setNodePaletteSearch("")}
+                    className="absolute right-3 top-2.5 text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-amber-100 dark:bg-amber-500/10 group-hover:bg-amber-200 dark:group-hover:bg-amber-500/20 rounded-md text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20 transition-all">
-                        <Database size={14} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                        S3 Bucket
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
-                      + Add
-                    </span>
+                    <X size={13} />
                   </button>
-                  <button
-                    onClick={addNewS3ObjectNode}
-                    draggable={true}
-                    onDragStart={(e) => onDragStart(e, "s3ObjectNode")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-amber-100 dark:bg-amber-500/10 group-hover:bg-amber-200 dark:group-hover:bg-amber-500/20 rounded-md text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20 transition-all">
-                        <File size={14} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                        S3 Object
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
-                      + Add
-                    </span>
-                  </button>
-                </div>
+                )}
               </div>
             </div>
 
-            {/* CATEGORY: COMPUTE */}
-            <div className="flex flex-col gap-1 mb-2">
-              <button
-                onClick={() => toggleCategory("compute")}
-                className="flex items-center gap-2 px-2 py-2 w-full hover:bg-slate-100 dark:hover:bg-zinc-800/50 rounded-lg transition-colors text-left group"
-              >
-                <ChevronRight
-                  size={14}
-                  className={`text-slate-400 dark:text-zinc-500 transition-transform duration-200 ${expandedCategories.compute ? "rotate-90" : ""}`}
-                />
-                <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider group-hover:text-slate-900 dark:group-hover:text-zinc-200 transition-colors">
-                  Compute
-                </span>
-              </button>
-              <div
-                className={`flex flex-col gap-2 overflow-hidden transition-all duration-300 ease-in-out origin-top ${expandedCategories.compute ? "max-h-96 opacity-100 scale-y-100 mt-1" : "max-h-0 opacity-0 scale-y-0"}`}
-              >
-                <div className="pl-6 pr-2 pb-1">
-                  <button
-                    onClick={addNewEC2Node}
-                    draggable={true}
-                    onDragStart={(e) => onDragStart(e, "ec2Node")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-sky-100 dark:bg-sky-500/10 group-hover:bg-sky-200 dark:group-hover:bg-sky-500/20 rounded-md text-sky-600 dark:text-sky-500 border border-sky-200 dark:border-sky-500/20 transition-all">
-                        <Cpu size={14} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                        EC2 Instance
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
-                      + Add
-                    </span>
-                  </button>
+            {/* SCROLLABLE CATEGORIES LIST */}
+            <div className="flex-1 overflow-y-auto no-scrollbar p-3 flex flex-col gap-2">
+              {filteredCategories.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+                  <Search size={24} className="text-slate-300 dark:text-zinc-700 mb-2 animate-pulse" />
+                  <p className="text-xs font-bold text-slate-500 dark:text-zinc-400">No nodes found</p>
+                  <p className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5">Try searching for another term</p>
                 </div>
-              </div>
-            </div>
-
-            {/* CATEGORY: IAM */}
-            <div className="flex flex-col gap-1 mb-2">
-              <button
-                onClick={() => toggleCategory("iam")}
-                className="flex items-center gap-2 px-2 py-2 w-full hover:bg-slate-100 dark:hover:bg-zinc-800/50 rounded-lg transition-colors text-left group"
-              >
-                <ChevronRight
-                  size={14}
-                  className={`text-slate-400 dark:text-zinc-500 transition-transform duration-200 ${expandedCategories.iam ? "rotate-90" : ""}`}
-                />
-                <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider group-hover:text-slate-900 dark:group-hover:text-zinc-200 transition-colors">
-                  IAM
-                </span>
-              </button>
-              <div
-                className={`flex flex-col gap-2 overflow-hidden transition-all duration-300 ease-in-out origin-top ${expandedCategories.iam ? "max-h-96 opacity-100 scale-y-100 mt-1" : "max-h-0 opacity-0 scale-y-0"}`}
-              >
-                <div className="pl-6 pr-2 pb-1 flex flex-col gap-2">
-                  <button
-                    onClick={() => addNewIAMNode("User")}
-                    draggable={true}
-                    onDragStart={(e) => onDragStart(e, "iamNode", "User")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
-                        <User size={14} />
+              ) : (
+                filteredCategories.map((cat) => {
+                  const isExpanded = nodePaletteSearch ? true : expandedCategories[cat.id];
+                  return (
+                    <div key={cat.id} className="flex flex-col gap-1 mb-2">
+                      <button
+                        onClick={() => toggleCategory(cat.id)}
+                        className="flex items-center gap-2 px-2 py-2 w-full hover:bg-slate-100 dark:hover:bg-zinc-800/50 rounded-lg transition-colors text-left group"
+                      >
+                        <ChevronRight
+                          size={14}
+                          className={`text-slate-400 dark:text-zinc-500 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
+                        />
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider group-hover:text-slate-900 dark:group-hover:text-zinc-200 transition-colors">
+                          {cat.label}
+                        </span>
+                      </button>
+                      <div
+                        className={`flex flex-col gap-2 overflow-hidden transition-all duration-300 ease-in-out origin-top ${isExpanded ? "max-h-[500px] opacity-100 scale-y-100 mt-1" : "max-h-0 opacity-0 scale-y-0"}`}
+                      >
+                        <div className="pl-6 pr-2 pb-1 flex flex-col gap-2">
+                          {cat.items.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={item.action}
+                              draggable={true}
+                              onDragStart={(e) => {
+                                if (item.dragLabelType) {
+                                  onDragStart(e, item.dragType, item.dragLabelType);
+                                } else {
+                                  onDragStart(e, item.dragType);
+                                }
+                              }}
+                              className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`p-1.5 rounded-md transition-all ${item.iconBgClass}`}>
+                                  {item.icon}
+                                </div>
+                                <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
+                                  {item.label}
+                                </span>
+                              </div>
+                              {item.category !== "shapes" && (
+                                <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
+                                  + Add
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                        IAM User
-                      </span>
                     </div>
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
-                      + Add
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => addNewIAMNode("Group")}
-                    draggable={true}
-                    onDragStart={(e) => onDragStart(e, "iamGroupNode", "Group")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
-                        <Users size={14} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                        IAM Group
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
-                      + Add
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => addNewIAMNode("Role")}
-                    draggable={true}
-                    onDragStart={(e) => onDragStart(e, "iamNode", "Role")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
-                        <Shield size={14} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                        IAM Role
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
-                      + Add
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => addNewIAMNode("Policy")}
-                    draggable={true}
-                    onDragStart={(e) => onDragStart(e, "iamNode", "Policy")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-violet-100 dark:bg-violet-500/10 group-hover:bg-violet-200 dark:group-hover:bg-violet-500/20 rounded-md text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20 transition-all">
-                        <Key size={14} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                        IAM Policy
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 bg-white dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-800 transition-all">
-                      + Add
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* CATEGORY: SHAPES */}
-            <div className="flex flex-col gap-1">
-              <button
-                onClick={() => toggleCategory("shapes")}
-                className="flex items-center gap-2 px-2 py-2 w-full hover:bg-slate-100 dark:hover:bg-zinc-800/50 rounded-lg transition-colors text-left group"
-              >
-                <ChevronRight
-                  size={14}
-                  className={`text-slate-400 dark:text-zinc-500 transition-transform duration-200 ${expandedCategories.shapes ? "rotate-90" : ""}`}
-                />
-                <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider group-hover:text-slate-900 dark:group-hover:text-zinc-200 transition-colors">
-                  Shapes & Groups
-                </span>
-              </button>
-              <div
-                className={`flex flex-col gap-2 overflow-hidden transition-all duration-300 ease-in-out origin-top ${expandedCategories.shapes ? "max-h-96 opacity-100 scale-y-100 mt-1" : "max-h-0 opacity-0 scale-y-0"}`}
-              >
-                <div className="pl-6 pr-2 pb-1 flex flex-col gap-2">
-                  <button
-                    onClick={() => addNewShape("Rectangle")}
-                    draggable={true}
-                    onDragStart={(e) => onDragStart(e, "shapeNode", "Rectangle")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-blue-100 dark:bg-blue-500/10 group-hover:bg-blue-200 dark:group-hover:bg-blue-500/20 rounded-md text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20 transition-all">
-                        <Square size={14} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                        Rectangle Group
-                      </span>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => addNewShape("Circle")}
-                    draggable={true}
-                    onDragStart={(e) => onDragStart(e, "shapeNode", "Circle")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-blue-100 dark:bg-blue-500/10 group-hover:bg-blue-200 dark:group-hover:bg-blue-500/20 rounded-md text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20 transition-all">
-                        <CircleIcon size={14} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                        Circle Group
-                      </span>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => addNewShape("Text")}
-                    draggable={true}
-                    onDragStart={(e) => onDragStart(e, "shapeNode", "Text")}
-                    className="w-full flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all group shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-blue-100 dark:bg-blue-500/10 group-hover:bg-blue-200 dark:group-hover:bg-blue-500/20 rounded-md text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20 transition-all">
-                        <Type size={14} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                        Text Label
-                      </span>
-                    </div>
-                  </button>
-                </div>
-              </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </aside>
@@ -3667,7 +3752,7 @@ export default function CloudForgeEditor({
                         type="button"
                         onClick={() => updateNodeData("sourceType", "file")}
                         className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${(selectedNode.data?.sourceType || "file") === "file"
-                          ? "bg-white dark:bg-zinc-850 text-amber-500 shadow-sm"
+                          ? "bg-white dark:bg-zinc-800 text-amber-500 shadow-sm"
                           : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
                           }`}
                       >
@@ -3677,7 +3762,7 @@ export default function CloudForgeEditor({
                         type="button"
                         onClick={() => updateNodeData("sourceType", "folder")}
                         className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${selectedNode.data?.sourceType === "folder"
-                          ? "bg-white dark:bg-zinc-850 text-amber-500 shadow-sm"
+                          ? "bg-white dark:bg-zinc-800 text-amber-500 shadow-sm"
                           : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
                           }`}
                       >
@@ -3857,6 +3942,186 @@ export default function CloudForgeEditor({
           </aside>
         )}
 
+        {/* DOCUMENTATIONS MODAL */}
+        {isDocsOpen && (
+          <div className="fixed inset-0 bg-slate-50 dark:bg-zinc-950 z-[70] flex flex-col animate-fade-in overflow-y-auto custom-scrollbar select-text">
+            {/* Top Navigation / Header */}
+            <header className="h-16 px-6 border-b border-slate-200 dark:border-zinc-900 bg-white dark:bg-zinc-950/50 backdrop-blur-md flex items-center justify-between sticky top-0 z-10 shrink-0 select-none">
+              <div className="flex-1 flex justify-start">
+                <button
+                  onClick={() => setIsDocsOpen(false)}
+                  className="flex items-center gap-2.5 text-sm font-bold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors bg-transparent border-none py-1.5 focus:outline-none cursor-pointer"
+                >
+                  <ArrowLeft size={18} className="text-slate-500 dark:text-zinc-400" /> Back to Workspace
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-slate-900 dark:text-zinc-100 font-bold text-sm select-none">
+                <BookOpen size={18} className="text-amber-500" />
+                <span>Documentations</span>
+              </div>
+              <div className="flex-1 flex justify-end" />
+            </header>
+
+            {/* Main Content Area */}
+            <div className="flex-1 max-w-6xl w-full mx-auto px-6 md:px-12 py-12 space-y-12">
+              
+              {/* App Brand & Intro */}
+              <div className="space-y-4 text-center md:text-left select-text">
+                <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight flex items-center justify-center md:justify-start gap-3">
+                  <span className="bg-gradient-to-tr from-amber-500 to-orange-600 bg-clip-text text-transparent">
+                    CloudForge
+                  </span>
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700/50 font-bold tracking-wider uppercase">
+                    v1.0.0
+                  </span>
+                </h1>
+                <p className="text-lg text-slate-650 dark:text-zinc-300 font-medium leading-relaxed">
+                  A visual collaborative cloud infrastructure editor designed to design, audit, cost-analyze, and compile infrastructure architectures directly into production-ready Terraform configurations.
+                </p>
+                <p className="text-sm text-slate-500 dark:text-zinc-400 leading-relaxed">
+                  With CloudForge, you can drag and drop standard AWS cloud components onto an interactive canvas, configure properties in real-time, instantly compile state into declarative Terraform files, inspect security findings in audit mode, and run automated deployments/destruction routines through our integrated management console.
+                </p>
+              </div>
+
+              {/* Screenshot Section */}
+              <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm dark:shadow-xl space-y-4">
+                <div className="flex items-center justify-between select-none">
+                  <h3 className="text-sm font-extrabold text-slate-800 dark:text-zinc-200 uppercase tracking-wider">
+                    Workspace Visual Guide Reference
+                  </h3>
+                  <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-500 font-bold px-2 py-0.5 rounded-full border border-amber-500/20">
+                    Canvas Layout Map
+                  </span>
+                </div>
+                <div className="border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-inner bg-slate-50 dark:bg-zinc-950 flex justify-center items-center p-2 select-none">
+                  <img
+                    src="/docs-screenshot.png"
+                    alt="CloudForge Editor Workspace Element Reference Map"
+                    className="w-full h-auto object-contain max-h-[80vh] rounded-xl"
+                  />
+                </div>
+              </div>
+
+              {/* Explanations Grid */}
+              <div className="space-y-6 select-text">
+                <h3 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight border-b border-slate-200 dark:border-zinc-900 pb-3">
+                  Workspace Elements Explained
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Item 1 */}
+                  <div className="p-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm flex gap-4">
+                    <div className="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-500 font-black text-sm flex items-center justify-center shrink-0 border border-amber-500/20 shadow-sm">
+                      1
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-zinc-100">
+                        Component Palette Drawer
+                      </h4>
+                      <p className="text-xs text-slate-550 dark:text-zinc-400 leading-relaxed">
+                        Houses all available cloud resources (S3 Buckets, S3 Objects, EC2 instances, IAM configurations, Shapes/Containers) organized by category. Click <strong>+ Add</strong> or drag components onto the canvas workspace.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 2 */}
+                  <div className="p-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm flex gap-4">
+                    <div className="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-500 font-black text-sm flex items-center justify-center shrink-0 border border-amber-500/20 shadow-sm">
+                      2
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-zinc-100">
+                        Project Navigator & Controls
+                      </h4>
+                      <p className="text-xs text-slate-555 dark:text-zinc-400 leading-relaxed">
+                        Displays the active project name. Click to switch projects, spin up a new project workspace, or launch the fullscreen Projects Dashboard screen.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 3 */}
+                  <div className="p-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm flex gap-4">
+                    <div className="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-500 font-black text-sm flex items-center justify-center shrink-0 border border-amber-500/20 shadow-sm">
+                      3
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-zinc-100">
+                        Mode Switcher & History
+                      </h4>
+                      <p className="text-xs text-slate-555 dark:text-zinc-400 leading-relaxed">
+                        Toggles undo/redo commands and cycles the active workspace mode between standard architecture drafting (<strong>Dev</strong>), compliance/security audits (<strong>Audit</strong>), and budget cost analysis (<strong>Budgets</strong>).
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 4 */}
+                  <div className="p-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm flex gap-4">
+                    <div className="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-500 font-black text-sm flex items-center justify-center shrink-0 border border-amber-500/20 shadow-sm">
+                      4
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-zinc-100">
+                        Global Canvas Search Engine
+                      </h4>
+                      <p className="text-xs text-slate-555 dark:text-zinc-400 leading-relaxed">
+                        Press <code>Ctrl + /</code> or click this search bar to search for any component added to the canvas. Selecting a search option centers and zooms in on that element instantly.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 5 */}
+                  <div className="p-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm flex gap-4">
+                    <div className="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-500 font-black text-sm flex items-center justify-center shrink-0 border border-amber-500/20 shadow-sm">
+                      5
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-zinc-100">
+                        Deployments History Panel
+                      </h4>
+                      <p className="text-xs text-slate-555 dark:text-zinc-400 leading-relaxed">
+                        Opens the deployment logs history. Allows users to load historical workspace configuration snapshots back onto the canvas, view code version logs, or run terminal teardowns.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 6 */}
+                  <div className="p-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm flex gap-4">
+                    <div className="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-500 font-black text-sm flex items-center justify-center shrink-0 border border-amber-500/20 shadow-sm">
+                      6
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-zinc-100">
+                        Configuration Settings Panel
+                      </h4>
+                      <p className="text-xs text-slate-555 dark:text-zinc-400 leading-relaxed">
+                        A central system panel containing editor preferences like dark/light/forest themes, application font size scaling, auto-save toggle controls, and canvas options.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 7 */}
+                  <div className="p-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm flex gap-4 md:col-span-2">
+                    <div className="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-500 font-black text-sm flex items-center justify-center shrink-0 border border-amber-500/20 shadow-sm">
+                      7
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-zinc-100">
+                        Component Properties Inspector
+                      </h4>
+                      <p className="text-xs text-slate-555 dark:text-zinc-400 leading-relaxed">
+                        Appears on selecting any item on the canvas. Configure AWS-specific fields (like instance sizes, AMI IDs, storage allocations, role access, subnet mapping) and observe pricing/logs updates dynamically.
+                      </p>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
         {/* SETTINGS MODAL */}
         {isSettingsOpen && (
           <div className="fixed inset-0 bg-slate-900/20 dark:bg-zinc-950/80 backdrop-blur-sm z-[70] flex items-center justify-center p-6 animate-fade-in">
@@ -3905,29 +4170,56 @@ export default function CloudForgeEditor({
                   <h4 className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
                     Editor Preferences
                   </h4>
-                  <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-zinc-900/50 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
-                    <div className="flex items-center gap-3">
-                      <Save
-                        size={18}
-                        className="text-slate-500 dark:text-zinc-400"
-                      />
-                      <div>
-                        <p className="text-sm font-bold text-slate-800 dark:text-zinc-200">
-                          Auto-Save Projects
-                        </p>
-                        <p className="text-[10px] font-medium text-slate-500 dark:text-zinc-500 mt-0.5">
-                          Continuously sync to local storage
-                        </p>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-zinc-900/50 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
+                      <div className="flex items-center gap-3">
+                        <Save
+                          size={18}
+                          className="text-slate-500 dark:text-zinc-400"
+                        />
+                        <div>
+                          <p className="text-sm font-bold text-slate-800 dark:text-zinc-200">
+                            Auto-Save Projects
+                          </p>
+                          <p className="text-[10px] font-medium text-slate-500 dark:text-zinc-500 mt-0.5">
+                            Continuously sync to local storage
+                          </p>
+                        </div>
                       </div>
+                      <input
+                        type="checkbox"
+                        checked={userSettings.autoSave}
+                        onChange={(e) =>
+                          updateSettings("autoSave", e.target.checked)
+                        }
+                        className="accent-amber-500 h-5 w-5 rounded cursor-pointer"
+                      />
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={userSettings.autoSave}
-                      onChange={(e) =>
-                        updateSettings("autoSave", e.target.checked)
-                      }
-                      className="accent-amber-500 h-5 w-5 rounded cursor-pointer"
-                    />
+
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-zinc-900/50 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
+                      <div className="flex items-center gap-3">
+                        <Layers
+                          size={18}
+                          className="text-slate-500 dark:text-zinc-400"
+                        />
+                        <div>
+                          <p className="text-sm font-bold text-slate-800 dark:text-zinc-200">
+                            Show Canvas MiniMap
+                          </p>
+                          <p className="text-[10px] font-medium text-slate-500 dark:text-zinc-500 mt-0.5">
+                            Display a miniature navigation overview in the bottom-right
+                          </p>
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={userSettings.showMinimap}
+                        onChange={(e) =>
+                          updateSettings("showMinimap", e.target.checked)
+                        }
+                        className="accent-amber-500 h-5 w-5 rounded cursor-pointer"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -4515,7 +4807,7 @@ export default function CloudForgeEditor({
                         >
                           <div className={`p-1 rounded transition-colors ${isActive
                             ? "bg-amber-100 dark:bg-amber-500/10 text-amber-500"
-                            : "bg-slate-100 dark:bg-zinc-850 group-hover:bg-amber-100 dark:group-hover:bg-amber-500/10 text-slate-500 dark:text-zinc-400 group-hover:text-amber-500"
+                            : "bg-slate-100 dark:bg-zinc-800 group-hover:bg-amber-100 dark:group-hover:bg-amber-500/10 text-slate-500 dark:text-zinc-400 group-hover:text-amber-500"
                             }`}>
                             <opt.icon size={12} />
                           </div>
@@ -4664,7 +4956,7 @@ export default function CloudForgeEditor({
                     </button>
                     <button
                       onClick={handleCloseModal}
-                      className="flex items-center gap-1.5 px-5 h-10 text-xs font-bold rounded-xl bg-slate-900 dark:bg-zinc-850 hover:bg-slate-800 dark:hover:bg-zinc-850/80 text-white dark:text-zinc-100 border border-slate-950 dark:border-zinc-800 shadow-md transition-all active:scale-95"
+                      className="flex items-center gap-1.5 px-5 h-10 text-xs font-bold rounded-xl bg-slate-900 dark:bg-zinc-800 hover:bg-slate-800 dark:hover:bg-zinc-700 text-white dark:text-zinc-100 border border-slate-950 dark:border-zinc-800 shadow-md transition-all active:scale-95"
                     >
                       Close Console
                     </button>
@@ -4696,7 +4988,7 @@ export default function CloudForgeEditor({
                         <CustomSelect
                           value={sortBy}
                           onChange={(val) => setSortBy(val)}
-                          className="w-full h-8 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-750 text-xs font-semibold text-slate-700 dark:text-zinc-200 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors cursor-pointer"
+                          className="w-full h-8 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-xs font-semibold text-slate-700 dark:text-zinc-200 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors cursor-pointer"
                           options={[
                             { value: "date", label: "Date" },
                             { value: "numerical", label: "Numerical" },
@@ -4739,7 +5031,7 @@ export default function CloudForgeEditor({
                           onClick={() => setSelectedDeployment(dep)}
                           className={`w-full text-left p-3.5 rounded-xl border transition-all flex flex-col gap-1.5 group select-none ${isSelected
                             ? "bg-amber-100/50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30"
-                            : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-850 hover:border-slate-300 dark:hover:border-zinc-750"
+                            : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700"
                             }`}
                         >
                           <div className="flex justify-between items-center w-full min-w-0">
@@ -4891,7 +5183,7 @@ export default function CloudForgeEditor({
                               }
                             });
                           }}
-                          className="flex items-center gap-1.5 px-4 h-9 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 dark:border-zinc-800 dark:hover:border-zinc-750 bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 shadow-sm transition-all active:scale-95"
+                          className="flex items-center gap-1.5 px-4 h-9 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 dark:border-zinc-800 dark:hover:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 shadow-sm transition-all active:scale-95"
                         >
                           <FolderOpen size={13} /> Load to Canvas
                         </button>
@@ -5244,7 +5536,7 @@ export default function CloudForgeEditor({
                                         <ul className="flex flex-col gap-2.5 text-xs text-slate-700 dark:text-zinc-300">
                                           <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
                                             <span className="font-medium text-slate-450 dark:text-zinc-500">Compute Tier:</span>
-                                            <span className="font-bold font-mono bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-850 px-2 py-0.5 rounded">
+                                            <span className="font-bold font-mono bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 px-2 py-0.5 rounded">
                                               {instanceType} ({matchedType?.cpu || 1} vCPU, {matchedType?.ram || "1 GiB"})
                                             </span>
                                           </li>
@@ -5286,7 +5578,7 @@ export default function CloudForgeEditor({
                                           <ul className="flex flex-col gap-2.5 text-xs text-slate-700 dark:text-zinc-300">
                                             <li className="flex justify-between items-center py-1 border-b border-dashed border-slate-200 dark:border-zinc-800/80">
                                               <span className="font-medium text-slate-450 dark:text-zinc-500">Capacity Type:</span>
-                                              <span className="font-bold bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-850 px-2 py-0.5 rounded">
+                                              <span className="font-bold bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 px-2 py-0.5 rounded">
                                                 {isAuto ? "Auto-Calculated" : "Manual Estimate"}
                                               </span>
                                             </li>
@@ -5601,6 +5893,7 @@ export default function CloudForgeEditor({
           </div>
         )}
       </div>
+      </SettingsContext.Provider>
     </ModeContext.Provider>
   );
 }

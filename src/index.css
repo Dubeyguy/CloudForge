@@ -31,6 +31,15 @@ html, body, #root {
   background: #3f3f46;
 }
 
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 /* 5. Override React Flow CSS Variables for the Dark Theme */
 .react-flow {
   --xy-edge-stroke-default: #52525b;
@@ -319,4 +328,69 @@ html, body, #root {
 }
 .mode-budgets pre::selection, .mode-budgets pre *::selection {
   background-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+/* Global Focus Outline and Click Highlight Reset */
+input:focus,
+button:focus,
+select:focus,
+textarea:focus,
+div:focus {
+  outline: none !important;
+}
+
+/* Disable mobile tap highlight colored flashes */
+* {
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* --- Premium Selection Box & Selected Bounding Box Styling --- */
+.react-flow__selection {
+  background: rgba(245, 158, 11, 0.06) !important;
+  border: 1.5px dashed #f59e0b !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.15) !important;
+}
+
+.react-flow__nodesselection-rect {
+  border: 1.5px dashed #f59e0b !important;
+  border-radius: 12px !important;
+  background: rgba(245, 158, 11, 0.03) !important;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.08) !important;
+}
+
+/* Audit Mode */
+.mode-audit .react-flow__selection {
+  background: rgba(99, 102, 241, 0.06) !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.15) !important;
+}
+.mode-audit .react-flow__nodesselection-rect {
+  background: rgba(99, 102, 241, 0.03) !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.08) !important;
+}
+
+/* Budgets Mode */
+.mode-budgets .react-flow__selection {
+  background: rgba(16, 185, 129, 0.06) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.15) !important;
+}
+.mode-budgets .react-flow__nodesselection-rect {
+  background: rgba(16, 185, 129, 0.03) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.08) !important;
+}
+
+/* Forest Theme */
+.forest .react-flow__selection {
+  background: rgba(107, 142, 78, 0.08) !important;
+  border-color: #6B8E4E !important;
+  box-shadow: 0 0 10px rgba(107, 142, 78, 0.15) !important;
+}
+.forest .react-flow__nodesselection-rect {
+  background: rgba(107, 142, 78, 0.04) !important;
+  border-color: #6B8E4E !important;
+  box-shadow: 0 0 15px rgba(107, 142, 78, 0.08) !important;
 }
