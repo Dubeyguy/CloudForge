@@ -1,16 +1,46 @@
+# ─── Dependencies ────────────────────────────────────────────────
+node_modules/
+
+# ─── TypeScript compilation output ───────────────────────────────
+dist/
 *.d.ts
 *.js
-node_modules
-cdktf.out
-cdktf.log
-*terraform.*.tfstate*
-.gen
-.terraform
 tsconfig.tsbuildinfo
+
+# Keep test/setup files that are committed as JS
 !jest.config.js
 !setup.js
 
-# Cached state & deployments
+# ─── CDKTF / Terraform generated files ───────────────────────────
+.gen/
+cdktf.out/
+cdktf.log
+.terraform/
+*terraform.*.tfstate*
+terraform.*.tfstate
+terraform.*.tfstate.backup
+
+# ─── Terraform binary (should not be committed) ──────────────────
+terraform.exe
+terraform
+terraform.zip
+
+# ─── Runtime / cached state ──────────────────────────────────────
+cache/
 last-canvas-state.json
 deployed-cdk.tf.json
 deployments/
+
+# ─── Logs ────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+
+# ─── Environment & secrets ───────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── OS junk ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
