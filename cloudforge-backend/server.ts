@@ -21,6 +21,7 @@ import { IamRolePolicyAttachment } from './.gen/providers/aws/iam-role-policy-at
 import { Instance } from './.gen/providers/aws/instance';
 import { IamInstanceProfile } from './.gen/providers/aws/iam-instance-profile';
 import { S3Object } from './.gen/providers/aws/s3-object';
+import { SecurityGroup } from './.gen/providers/aws/security-group';
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -50,6 +51,33 @@ interface VisualNode {
     volumeSize?: number;
     sourceType?: string;
     sourcePath?: string;
+    hasCustomSecurityGroup?: boolean;
+    securityGroup?: {
+      id?: string;
+      name: string;
+      rules: Array<{
+        id: string;
+        type: 'ingress' | 'egress';
+        protocol: string;
+        fromPort: number;
+        toPort: number;
+        cidr?: string;
+        description?: string;
+      }>;
+    };
+    securityGroups?: Array<{
+      id: string;
+      name: string;
+      rules: Array<{
+        id: string;
+        type: 'ingress' | 'egress';
+        protocol: string;
+        fromPort: number;
+        toPort: number;
+        cidr?: string;
+        description?: string;
+      }>;
+    }>;
   };
 }
 
@@ -80,6 +108,59 @@ class CloudForgeStack extends TerraformStack {
       iamResources.set(key, { ref, id: nodes.find(n => (n.data?.label || n.id).toLowerCase().replace(/[^a-z0-9-]/g, '-') === name)?.id || name });
       return ref;
     };
+
+    // Pre-pass: Instantiate all unique Custom Security Groups
+    const generatedSgs = new Map<string, SecurityGroup>();
+    nodes.forEach((node) => {
+      if (node.type === 'ec2Node' && node.data.hasCustomSecurityGroup) {
+        const sgs = node.data.securityGroups || (node.data.securityGroup ? [node.data.securityGroup] : []);
+        sgs.forEach((sgConfig) => {
+          if (!sgConfig) return;
+          const sgId = sgConfig.id || `sg-legacy-${node.id}`;
+          
+          if (!generatedSgs.has(sgId)) {
+            const sgName = sgConfig.name || `${node.data.label.toLowerCase().replace(/[^a-z0-9-]/g, '-')}-sg`;
+            const safeSgId = sgId.replace(/[^a-zA-Z0-9]/g, '');
+
+            const ingressRules = (sgConfig.rules || [])
+              .filter((r: any) => r.type === 'ingress')
+              .map((r: any) => {
+                const isAll = r.protocol === 'all';
+                return {
+                  fromPort: isAll ? 0 : Number(r.fromPort),
+                  toPort: isAll ? 0 : Number(r.toPort),
+                  protocol: isAll ? '-1' : r.protocol,
+                  cidrBlocks: [r.cidr || '0.0.0.0/0'],
+                  description: r.description || '',
+                };
+              });
+
+            const egressRules = (sgConfig.rules || [])
+              .filter((r: any) => r.type === 'egress')
+              .map((r: any) => {
+                const isAll = r.protocol === 'all';
+                return {
+                  fromPort: isAll ? 0 : Number(r.fromPort),
+                  toPort: isAll ? 0 : Number(r.toPort),
+                  protocol: isAll ? '-1' : r.protocol,
+                  cidrBlocks: [r.cidr || '0.0.0.0/0'],
+                  description: r.description || '',
+                };
+              });
+
+            const sgResource = new SecurityGroup(this, `${safeSgId}Resource`, {
+              name: sgName,
+              description: `Security group ${sgName}`,
+              ingress: ingressRules,
+              egress: egressRules,
+              tags: { ManagedBy: 'CloudForge', Name: sgName },
+            });
+
+            generatedSgs.set(sgId, sgResource);
+          }
+        });
+      }
+    });
 
     nodes.forEach((node) => {
       const safeId = node.id.replace(/[^a-zA-Z0-9]/g, '');
@@ -187,6 +268,26 @@ class CloudForgeStack extends TerraformStack {
         const ami = node.data.ami || 'ami-0c55b159cbfafe1f0';
         const volumeSize = node.data.volumeSize || 8;
 
+        let securityGroupIds: string[] | undefined = undefined;
+
+        if (node.data.hasCustomSecurityGroup) {
+          const sgs = node.data.securityGroups || (node.data.securityGroup ? [node.data.securityGroup] : []);
+          if (sgs.length > 0) {
+            const ids: string[] = [];
+            sgs.forEach((sgConfig) => {
+              if (!sgConfig) return;
+              const sgId = sgConfig.id || `sg-legacy-${node.id}`;
+              const sgResource = generatedSgs.get(sgId);
+              if (sgResource) {
+                ids.push(sgResource.id);
+              }
+            });
+            if (ids.length > 0) {
+              securityGroupIds = ids;
+            }
+          }
+        }
+
         const ec2Instance = new Instance(this, safeId, {
           ami: ami,
           instanceType: instanceType,
@@ -194,6 +295,7 @@ class CloudForgeStack extends TerraformStack {
             volumeSize: volumeSize,
             volumeType: 'gp3',
           },
+          vpcSecurityGroupIds: securityGroupIds,
           tags: { ManagedBy: 'CloudForge', Name: labelName },
         });
 

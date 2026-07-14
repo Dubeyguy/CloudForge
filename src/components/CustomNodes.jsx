@@ -687,12 +687,13 @@ export const IAMGroupNode = ({ id, data, selected }) => {
   );
 };
 
-export const EC2Node = ({ data }) => {
+export const EC2Node = ({ id, data }) => {
   const activeMode = React.useContext(ModeContext);
   const isBudgetMode = activeMode === "budgets";
   const isAuditMode = activeMode === "audit";
   const cost = data?.cost || 8.50;
   const findings = data?.auditFindings || [];
+  const { setNodes } = useReactFlow();
 
   let glowClass = "hover:border-sky-400 dark:hover:border-sky-500/50";
   let borderClass = "border-slate-200 dark:border-zinc-800";
@@ -728,8 +729,38 @@ export const EC2Node = ({ data }) => {
     }
   }
 
+  const handleSgClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === id
+          ? { ...n, data: { ...n.data, isSgPopupOpen: true } }
+          : n
+      )
+    );
+  };
+
+  const hasCustomSg = !!data?.hasCustomSecurityGroup;
+  let sgName = "default (AWS)";
+  if (hasCustomSg) {
+    if (Array.isArray(data?.securityGroups)) {
+      if (data.securityGroups.length === 0) {
+        sgName = "No SGs Attached";
+      } else if (data.securityGroups.length === 1) {
+        sgName = data.securityGroups[0]?.name || "custom-sg";
+      } else {
+        sgName = `${data.securityGroups[0]?.name || "custom-sg"} (+${data.securityGroups.length - 1} more)`;
+      }
+    } else if (data?.securityGroup) {
+      sgName = data.securityGroup.name || "custom-sg";
+    } else {
+      sgName = "No SGs Attached";
+    }
+  }
+
   return (
-    <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 shadow-lg dark:shadow-xl w-[220px] transition-all cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
+    <div className={`bg-white dark:bg-zinc-900 border rounded-xl shadow-lg dark:shadow-xl w-[360px] flex flex-row overflow-hidden transition-all cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
       <ZoomedOutOverlay type="EC2 Instance" name={data?.label} colorClass="bg-sky-500" borderClass="border-sky-500" isCard={true} />
       <AuditBadge data={data} />
       <Handle
@@ -765,7 +796,8 @@ export const EC2Node = ({ data }) => {
         <div className="w-3 h-3 rounded-full bg-sky-500 border-2 border-white dark:border-zinc-900 shadow-md" />
       </Handle>
 
-      <div className="flex items-center justify-between gap-2 min-w-0">
+      {/* Left side: EC2 info */}
+      <div className="flex-1 p-3 flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="p-2 bg-sky-50 dark:bg-sky-500/10 rounded-lg text-sky-600 dark:text-sky-500 border border-sky-100 dark:border-sky-500/20 shadow-inner shrink-0">
             <Cpu size={16} />
@@ -782,6 +814,24 @@ export const EC2Node = ({ data }) => {
         <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded-md shadow-sm transition-colors ${isBudgetMode ? badgeClass : "bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-500/20"}`}>
           {isBudgetMode ? `$${cost.toFixed(2)}/mo` : (data?.instanceType || "t2.micro")}
         </span>
+      </div>
+
+      {/* Right side: Security Group info */}
+      <div 
+        onClick={handleSgClick}
+        className={`w-[130px] border-l border-slate-100 dark:border-zinc-800/80 p-3 flex flex-row items-center gap-2 hover:bg-slate-50 dark:hover:bg-zinc-800/40 cursor-pointer transition-colors nodrag select-none shrink-0`}
+      >
+        <div className={`p-1.5 rounded-md shrink-0 border ${hasCustomSg ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border-emerald-100 dark:border-emerald-500/20" : "bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 border-slate-100 dark:border-zinc-700/50"}`}>
+          <Shield size={14} />
+        </div>
+        <div className="flex flex-col min-w-0">
+          <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-zinc-500">
+            Security Group
+          </span>
+          <span className={`text-xs font-bold truncate ${hasCustomSg ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-zinc-400"}`}>
+            {sgName}
+          </span>
+        </div>
       </div>
     </div>
   );

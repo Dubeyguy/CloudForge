@@ -28,6 +28,468 @@ import { CustomSelect, RegionSelect, STANDARD_REGIONS } from "./CustomSelect";
 import { nodeTypes, ModeContext, SettingsContext, AuditBadge } from "./CustomNodes";
 import { ALL_INSTANCE_TYPES, REGIONAL_MULTIPLIERS, OS_IMAGES, calculateEC2Cost } from "./EC2PricingDb";
 
+const SgRulesEditorSubView = ({ sg, onBack, onSave }) => {
+  const [name, setName] = useState(sg.name || "");
+  const [rules, setRules] = useState(sg.rules || []);
+
+  const addRule = (type = "ingress") => {
+    const newRule = {
+      id: `rule-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      protocol: "tcp",
+      fromPort: 80,
+      toPort: 80,
+      cidr: "0.0.0.0/0",
+      description: ""
+    };
+    setRules([...rules, newRule]);
+  };
+
+  const deleteRule = (ruleId) => {
+    setRules(rules.filter(r => r.id !== ruleId));
+  };
+
+  const updateRuleField = (ruleId, field, value) => {
+    setRules(rules.map(r => {
+      if (r.id === ruleId) {
+        const updated = { ...r, [field]: value };
+        if (field === "fromPort" && (r.protocol === "tcp" || r.protocol === "udp")) {
+          updated.toPort = value;
+        }
+        return updated;
+      }
+      return r;
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center animate-fade-in p-4">
+      <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-4xl h-[600px] flex flex-col shadow-2xl overflow-hidden animate-scale-up nodrag text-left">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 shrink-0">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-zinc-200">
+            <button
+              onClick={onBack}
+              className="p-1 hover:bg-slate-100 dark:hover:bg-zinc-805 rounded-lg transition-colors text-slate-500 hover:text-slate-700"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div className="p-1.5 bg-emerald-100 dark:bg-emerald-500/20 rounded-lg text-emerald-600 dark:text-emerald-500 ml-1">
+              <Shield size={18} />
+            </div>
+            <h3 className="font-bold text-sm uppercase tracking-wide">
+              Edit Security Group Rules
+            </h3>
+          </div>
+          <button
+            onClick={onBack}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
+          {/* Name Field */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+              Security Group Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+              placeholder="e.g. web-server-sg"
+              className="w-full h-11 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-semibold text-slate-850 dark:text-zinc-150 rounded-xl border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner"
+            />
+          </div>
+
+          {/* Rules Section */}
+          <div className="flex-1 flex flex-col gap-3">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-900 pb-2 shrink-0">
+              <span className="text-xs font-bold text-slate-850 dark:text-zinc-200 font-mono uppercase tracking-wider">
+                Inbound & Outbound Rules ({rules.length})
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => addRule("ingress")}
+                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 border border-emerald-100 dark:border-emerald-500/20 rounded-lg transition-colors"
+                >
+                  <Plus size={12} /> Add Inbound Rule
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addRule("egress")}
+                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-slate-50 dark:bg-zinc-850 text-slate-600 dark:text-zinc-350 hover:bg-slate-100 dark:hover:bg-zinc-700/60 border border-slate-200 dark:border-zinc-800 rounded-lg transition-colors"
+                >
+                  <Plus size={12} /> Add Outbound Rule
+                </button>
+              </div>
+            </div>
+
+            {rules.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-200 dark:border-zinc-800 rounded-2xl p-8 text-center bg-slate-50/30 dark:bg-zinc-950/20 my-4">
+                <Shield className="text-slate-350 dark:text-zinc-700 mb-2" size={32} />
+                <p className="text-xs font-bold text-slate-400 dark:text-zinc-500">No active rules configured.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {rules.map((rule, idx) => (
+                  <div 
+                    key={rule.id}
+                    className="flex flex-row items-center gap-2.5 p-3 bg-slate-50/50 dark:bg-zinc-900/30 border border-slate-250/60 dark:border-zinc-800/80 rounded-xl hover:border-slate-350 dark:hover:border-zinc-750 transition-all text-xs"
+                  >
+                    <div className="font-mono text-slate-450 text-[10px] w-6 text-center shrink-0">
+                      #{idx + 1}
+                    </div>
+
+                    {/* Rule Type */}
+                    <div className="w-[100px] shrink-0">
+                      <select
+                        value={rule.type}
+                        onChange={(e) => updateRuleField(rule.id, "type", e.target.value)}
+                        className="w-full h-9 px-2 bg-white dark:bg-zinc-950 border border-slate-250 dark:border-zinc-800 rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                      >
+                        <option value="ingress">Inbound</option>
+                        <option value="egress">Outbound</option>
+                      </select>
+                    </div>
+
+                    {/* Protocol */}
+                    <div className="w-[90px] shrink-0">
+                      <select
+                        value={rule.protocol}
+                        onChange={(e) => updateRuleField(rule.id, "protocol", e.target.value)}
+                        className="w-full h-9 px-2 bg-white dark:bg-zinc-950 border border-slate-255 dark:border-zinc-800 rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                      >
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                        <option value="icmp">ICMP</option>
+                        <option value="all">All Traffic</option>
+                      </select>
+                    </div>
+
+                    {/* Port Range */}
+                    <div className="flex items-center gap-1.5 w-[140px] shrink-0">
+                      <input
+                        type="number"
+                        min="0"
+                        max="65535"
+                        disabled={rule.protocol === "all" || rule.protocol === "icmp"}
+                        value={rule.protocol === "all" || rule.protocol === "icmp" ? "" : rule.fromPort}
+                        onChange={(e) => updateRuleField(rule.id, "fromPort", parseInt(e.target.value) || 0)}
+                        placeholder="Port"
+                        className="w-full h-9 px-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg text-xs font-semibold text-center focus:outline-none focus:border-emerald-500 disabled:bg-slate-100 dark:disabled:bg-zinc-900 disabled:opacity-50"
+                      />
+                      <span className="text-slate-450 font-bold">-</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="65535"
+                        disabled={rule.protocol === "all" || rule.protocol === "icmp"}
+                        value={rule.protocol === "all" || rule.protocol === "icmp" ? "" : rule.toPort}
+                        onChange={(e) => updateRuleField(rule.id, "toPort", parseInt(e.target.value) || 0)}
+                        placeholder="Port"
+                        className="w-full h-9 px-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg text-xs font-semibold text-center focus:outline-none focus:border-emerald-500 disabled:bg-slate-100 dark:disabled:bg-zinc-900 disabled:opacity-50"
+                      />
+                    </div>
+
+                    {/* Source / Destination CIDR */}
+                    <div className="w-[130px] shrink-0">
+                      <input
+                        type="text"
+                        value={rule.cidr}
+                        onChange={(e) => updateRuleField(rule.id, "cidr", e.target.value)}
+                        placeholder="0.0.0.0/0"
+                        className="w-full h-9 px-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg text-xs font-mono font-semibold focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={rule.description}
+                        onChange={(e) => updateRuleField(rule.id, "description", e.target.value)}
+                        placeholder="Rule description..."
+                        className="w-full h-9 px-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg text-xs focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    {/* Actions */}
+                    <button
+                      type="button"
+                      onClick={() => deleteRule(rule.id)}
+                      className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-lg transition-colors shrink-0"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 shrink-0">
+          <button
+            onClick={onBack}
+            className="h-10 px-4 text-xs font-bold text-slate-500 dark:text-zinc-450 hover:bg-slate-100 dark:hover:bg-zinc-850 rounded-xl transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave({ ...sg, name, rules })}
+            className="h-10 px-5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-xl shadow-sm hover:shadow transition-all"
+          >
+            Save Rules
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SgManagerModal = ({ node, nodes, onClose, onUpdateSgs }) => {
+  const [activeEditSgId, setActiveEditSgId] = useState(null);
+
+  // Compute list of attached SGs
+  const attachedSgs = useMemo(() => {
+    return Array.isArray(node.data?.securityGroups) ? node.data.securityGroups : [];
+  }, [node.data?.securityGroups]);
+
+  // Compute all unique custom SGs on the canvas
+  const globalSgs = useMemo(() => {
+    const sgs = [];
+    const seenIds = new Set();
+    nodes.forEach((n) => {
+      if (n.type === "ec2Node" && n.data?.hasCustomSecurityGroup && n.data?.securityGroups) {
+        n.data.securityGroups.forEach((sg) => {
+          if (sg && sg.id && !seenIds.has(sg.id)) {
+            seenIds.add(sg.id);
+            sgs.push(sg);
+          }
+        });
+      } else if (n.type === "ec2Node" && n.data?.hasCustomSecurityGroup && n.data?.securityGroup) {
+        const sg = n.data.securityGroup;
+        if (sg && sg.id && !seenIds.has(sg.id)) {
+          seenIds.add(sg.id);
+          sgs.push(sg);
+        }
+      }
+    });
+    return sgs;
+  }, [nodes]);
+
+  // If editing a specific SG, show the rules editor sub-view
+  if (activeEditSgId !== null) {
+    const targetSg = globalSgs.find(sg => sg.id === activeEditSgId);
+    if (targetSg) {
+      return (
+        <SgRulesEditorSubView
+          sg={targetSg}
+          onBack={() => setActiveEditSgId(null)}
+          onSave={(updatedSg) => {
+            onUpdateSgs("edit", updatedSg);
+            setActiveEditSgId(null);
+          }}
+        />
+      );
+    }
+  }
+
+  // Create new SG
+  const handleCreateNewSg = () => {
+    const newSgId = `sg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const newSg = {
+      id: newSgId,
+      name: `${node.data?.label || "ec2"}-sg-${globalSgs.length + 1}`,
+      rules: [
+        { id: "default-ssh", type: "ingress", protocol: "tcp", fromPort: 22, toPort: 22, cidr: "0.0.0.0/0", description: "Allow SSH" },
+        { id: "default-http", type: "ingress", protocol: "tcp", fromPort: 80, toPort: 80, cidr: "0.0.0.0/0", description: "Allow HTTP" }
+      ]
+    };
+    onUpdateSgs("create-attach", newSg);
+    setActiveEditSgId(newSgId);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center animate-fade-in p-4">
+      <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-3xl h-[550px] flex flex-col shadow-2xl overflow-hidden animate-scale-up nodrag text-left">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 shrink-0">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-zinc-200 font-sans">
+            <div className="p-1.5 bg-emerald-100 dark:bg-emerald-500/20 rounded-lg text-emerald-600 dark:text-emerald-500">
+              <Shield size={18} />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm uppercase tracking-wide">
+                Security Groups Manager
+              </h3>
+              <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-semibold mt-0.5 uppercase tracking-wider">
+                Instance: {node.data?.label || node.id}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
+          
+          {/* Section 1: Currently Associated SGs */}
+          <div className="flex flex-col gap-2 font-sans">
+            <h4 className="text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-widest font-mono shrink-0">
+              Associated Security Groups ({attachedSgs.length})
+            </h4>
+            
+            {attachedSgs.length === 0 ? (
+              <div className="p-4 border border-dashed border-slate-200 dark:border-zinc-800 rounded-xl text-center text-slate-450 dark:text-zinc-500 text-xs bg-slate-50/50 dark:bg-zinc-900/20">
+                No custom security groups attached. This instance will use the AWS Default security group.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {attachedSgs.map((sg) => (
+                  <div 
+                    key={sg.id}
+                    className="p-3 bg-emerald-50/15 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/20 rounded-xl flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="p-1.5 bg-emerald-100 dark:bg-emerald-500/20 rounded text-emerald-600 dark:text-emerald-500 shrink-0">
+                        <Shield size={14} />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-slate-700 dark:text-zinc-200 truncate">{sg.name}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5">{sg.rules?.length || 0} rules configured</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 font-sans">
+                      <button
+                        type="button"
+                        onClick={() => setActiveEditSgId(sg.id)}
+                        title="Edit Rules"
+                        className="p-1.5 text-slate-450 hover:text-sky-550 hover:bg-sky-50 dark:hover:bg-sky-500/10 border border-slate-200 dark:border-zinc-800 rounded-lg transition-all"
+                      >
+                        <Edit size={13} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onUpdateSgs("detach", sg.id)}
+                        className="px-2.5 py-1 text-[10px] font-bold text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 border border-slate-200 dark:border-zinc-800 rounded-lg transition-all"
+                      >
+                        Detach
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Section 2: Global SGs Library */}
+          <div className="flex flex-col gap-2 flex-1 min-h-[200px] font-sans">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-900 pb-2 shrink-0">
+              <h4 className="text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-widest font-mono">
+                Global Security Groups Library ({globalSgs.length})
+              </h4>
+              <button
+                type="button"
+                onClick={handleCreateNewSg}
+                className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors shadow-sm"
+              >
+                <Plus size={11} /> Create New Security Group
+              </button>
+            </div>
+
+            {globalSgs.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400 dark:text-zinc-650">
+                <Shield size={28} className="mb-2 opacity-50 text-slate-350" />
+                <p className="text-xs font-bold">No security groups created yet.</p>
+                <p className="text-[10px] max-w-[280px] mt-1 leading-normal">Create a new security group to manage network access controls globally across your instances.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {globalSgs.map((sg) => {
+                  const isAttached = attachedSgs.some(asg => asg.id === sg.id);
+                  return (
+                    <div 
+                      key={sg.id}
+                      className="p-3 bg-slate-50/50 dark:bg-zinc-900/30 border border-slate-200 dark:border-zinc-800 rounded-xl flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-1.5 bg-slate-100 dark:bg-zinc-800 rounded text-slate-500 dark:text-zinc-400 shrink-0">
+                          <Shield size={14} />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-slate-700 dark:text-zinc-200 truncate">{sg.name}</span>
+                          <span className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5">{sg.rules?.length || 0} rules</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isAttached ? (
+                          <span className="px-2.5 py-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg select-none border border-emerald-100 dark:border-emerald-500/20">
+                            Attached
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onUpdateSgs("attach", sg)}
+                            className="px-2.5 py-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-450 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-lg transition-all"
+                          >
+                            Attach
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveEditSgId(sg.id)}
+                          title="Edit Rules"
+                          className="p-1.5 text-slate-450 hover:text-sky-550 hover:bg-sky-50 dark:hover:bg-sky-955/20 border border-slate-205 dark:border-zinc-800 rounded-lg transition-all"
+                        >
+                          <Edit size={13} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => onUpdateSgs("delete", sg.id)}
+                          title="Delete Globally"
+                          className="p-1.5 text-slate-450 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/20 border border-slate-205 dark:border-zinc-800 rounded-lg transition-all"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end p-4 border-t border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 shrink-0 font-sans">
+          <button
+            onClick={onClose}
+            className="h-10 px-5 text-xs font-bold text-white bg-slate-700 hover:bg-slate-600 rounded-xl shadow-sm hover:shadow transition-all"
+          >
+            Close Manager
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const reconstructCanvasFromCode = (code) => {
   const nodes = [];
   const edges = [];
@@ -275,6 +737,60 @@ const reconstructCanvasFromCode = (code) => {
       const nodeId = `ec2_${tfId}`;
       nameToNodeId[instanceName] = nodeId;
       nameToNodeId[tfId] = nodeId;
+
+      // Extract referenced security group configurations if available
+      let hasCustomSecurityGroup = false;
+      const securityGroups = [];
+      if (config.vpc_security_group_ids && Array.isArray(config.vpc_security_group_ids)) {
+        config.vpc_security_group_ids.forEach((sgRef) => {
+          if (!sgRef) return;
+          const sgTfId = sgRef.replace(/\${aws_security_group\.(.+)\.id}/, '$1');
+          if (resources.aws_security_group && resources.aws_security_group[sgTfId]) {
+            const sgConfig = resources.aws_security_group[sgTfId];
+            hasCustomSecurityGroup = true;
+            const rules = [];
+
+            // Ingress rules
+            if (sgConfig.ingress) {
+              const ingressRules = Array.isArray(sgConfig.ingress) ? sgConfig.ingress : [sgConfig.ingress];
+              ingressRules.forEach((rule, idx) => {
+                rules.push({
+                  id: `rule-ingress-${idx}-${Math.random().toString(36).substr(2, 5)}`,
+                  type: "ingress",
+                  protocol: rule.protocol || "tcp",
+                  fromPort: rule.from_port || 80,
+                  toPort: rule.to_port || 80,
+                  cidr: Array.isArray(rule.cidr_blocks) ? rule.cidr_blocks[0] : (rule.cidr_blocks || "0.0.0.0/0"),
+                  description: rule.description || ""
+                });
+              });
+            }
+
+            // Egress rules
+            if (sgConfig.egress) {
+              const egressRules = Array.isArray(sgConfig.egress) ? sgConfig.egress : [sgConfig.egress];
+              egressRules.forEach((rule, idx) => {
+                rules.push({
+                  id: `rule-egress-${idx}-${Math.random().toString(36).substr(2, 5)}`,
+                  type: "egress",
+                  protocol: rule.protocol || "all",
+                  fromPort: rule.from_port || 0,
+                  toPort: rule.to_port || 0,
+                  cidr: Array.isArray(rule.cidr_blocks) ? rule.cidr_blocks[0] : (rule.cidr_blocks || "0.0.0.0/0"),
+                  description: rule.description || ""
+                });
+              });
+            }
+
+            securityGroups.push({
+              id: `sg-${sgTfId}`,
+              name: sgConfig.name || sgTfId,
+              rules
+            });
+          }
+        });
+      }
+
       nodes.push({
         id: nodeId,
         type: "ec2Node",
@@ -284,7 +800,9 @@ const reconstructCanvasFromCode = (code) => {
           instanceType: config.instance_type || "t2.micro",
           ami: config.ami || "",
           volumeSize: config.root_block_device?.volume_size || 8,
-          cost: 8.50
+          cost: 8.50,
+          hasCustomSecurityGroup,
+          securityGroups
         }
       });
     });
@@ -3611,6 +4129,88 @@ export default function CloudForgeEditor({
                       className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
                     />
                   </div>
+
+                  {/* SECURITY GROUP SECTION */}
+                  <div className="border-t border-slate-100 dark:border-zinc-800/80 pt-4 mt-2 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 uppercase tracking-wider font-mono">
+                        Security Group
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 py-0.5">
+                      <input
+                        type="checkbox"
+                        id="hasCustomSecurityGroup"
+                        checked={!!selectedNode.data?.hasCustomSecurityGroup}
+                        onChange={(e) => {
+                          const enabled = e.target.checked;
+                          if (enabled) {
+                            const currentSgs = selectedNode.data?.securityGroups || (selectedNode.data?.securityGroup ? [selectedNode.data.securityGroup] : []);
+                            const nextSgs = currentSgs.length > 0 ? currentSgs : [
+                              {
+                                id: `sg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                                name: `${selectedNode.data?.label || "ec2"}-sg`,
+                                rules: [
+                                  { id: "default-ssh", type: "ingress", protocol: "tcp", fromPort: 22, toPort: 22, cidr: "0.0.0.0/0", description: "Allow SSH" },
+                                  { id: "default-http", type: "ingress", protocol: "tcp", fromPort: 80, toPort: 80, cidr: "0.0.0.0/0", description: "Allow HTTP" }
+                                ]
+                              }
+                            ];
+                            setNodes((nds) => nds.map((n) => n.id === selectedNodeId ? { ...n, data: { ...n.data, hasCustomSecurityGroup: true, securityGroups: nextSgs } } : n));
+                          } else {
+                            setNodes((nds) => nds.map((n) => n.id === selectedNodeId ? { ...n, data: { ...n.data, hasCustomSecurityGroup: false } } : n));
+                          }
+                          takeSnapshot();
+                        }}
+                        className="rounded border-slate-300 dark:border-zinc-700 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <label htmlFor="hasCustomSecurityGroup" className="text-xs font-semibold text-slate-600 dark:text-zinc-400 select-none cursor-pointer">
+                        Enable Custom Security Group
+                      </label>
+                    </div>
+
+                    {selectedNode.data?.hasCustomSecurityGroup ? (
+                      <div className="flex flex-col gap-3 animate-fade-in">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNodes((nds) => nds.map((n) => n.id === selectedNodeId ? { ...n, data: { ...n.data, isSgPopupOpen: true } } : n));
+                          }}
+                          className="flex items-center justify-center gap-2 w-full h-10 px-4 text-xs font-bold text-emerald-600 dark:text-emerald-450 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 rounded-xl border border-emerald-100 dark:border-emerald-500/20 transition-all shadow-sm"
+                        >
+                          <Shield size={14} />
+                          Configure Security Groups
+                        </button>
+
+                        {/* List of currently attached SGs */}
+                        <div className="flex flex-col gap-1.5 mt-1 font-sans">
+                          <label className="text-[10px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                            Attached SGs ({selectedNode.data?.securityGroups?.length || 0})
+                          </label>
+                          {(selectedNode.data?.securityGroups || []).length === 0 ? (
+                            <div className="p-2 border border-slate-200 dark:border-zinc-800 rounded-lg text-center text-[10px] text-slate-450 dark:text-zinc-500 italic bg-slate-50 dark:bg-zinc-900/10">
+                              No SGs attached. Default AWS SG will be used.
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-1 max-h-[120px] overflow-y-auto custom-scrollbar">
+                              {(selectedNode.data?.securityGroups || []).map((sg) => (
+                                <div key={sg?.id || Math.random().toString()} className="p-2 bg-slate-50 dark:bg-zinc-900/30 border border-slate-200/50 dark:border-zinc-800/60 rounded-lg flex items-center justify-between text-xs text-slate-700 dark:text-zinc-300">
+                                  <span className="font-bold truncate max-w-[150px]">{sg?.name || "custom-sg"}</span>
+                                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 shrink-0">({sg?.rules?.length || 0} rules)</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-800/60 rounded-xl flex items-center gap-2.5 text-slate-450 dark:text-zinc-550 font-mono text-[10px]">
+                        <Shield size={14} className="shrink-0 text-slate-400" />
+                        <span>Using default AWS security group. Enable custom SG to define inbound/outbound rules.</span>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
@@ -4244,6 +4844,146 @@ export default function CloudForgeEditor({
             </div>
           </div>
         )}
+
+        {/* SECURITY GROUP CONFIGURATION MODAL */}
+        {(() => {
+          const sgNode = nodes.find((n) => n.type === "ec2Node" && n.data?.isSgPopupOpen);
+          if (!sgNode) return null;
+
+          const handleUpdateSgs = (action, payload) => {
+            if (action === "create-attach") {
+              setNodes((nds) =>
+                nds.map((n) => {
+                  if (n.id === sgNode.id) {
+                    const currentSgs = Array.isArray(n.data?.securityGroups) ? n.data.securityGroups : [];
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        hasCustomSecurityGroup: true,
+                        securityGroups: [...currentSgs, payload]
+                      }
+                    };
+                  }
+                  return n;
+                })
+              );
+              addLog(`Created and attached Security Group: ${payload.name}`, "info");
+            } else if (action === "attach") {
+              setNodes((nds) =>
+                nds.map((n) => {
+                  if (n.id === sgNode.id) {
+                    const currentSgs = Array.isArray(n.data?.securityGroups) ? n.data.securityGroups : [];
+                    if (currentSgs.some(sg => sg.id === payload.id)) return n;
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        hasCustomSecurityGroup: true,
+                        securityGroups: [...currentSgs, payload]
+                      }
+                    };
+                  }
+                  return n;
+                })
+              );
+              addLog(`Attached Security Group: ${payload.name}`, "info");
+            } else if (action === "detach") {
+              setNodes((nds) =>
+                nds.map((n) => {
+                  if (n.id === sgNode.id) {
+                    const currentSgs = Array.isArray(n.data?.securityGroups) ? n.data.securityGroups : [];
+                    const filtered = currentSgs.filter(sg => sg.id !== payload);
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        hasCustomSecurityGroup: filtered.length > 0,
+                        securityGroups: filtered
+                      }
+                    };
+                  }
+                  return n;
+                })
+              );
+              addLog(`Detached Security Group`, "info");
+            } else if (action === "edit") {
+              setNodes((nds) =>
+                nds.map((n) => {
+                  if (n.type === "ec2Node" && n.data?.securityGroups) {
+                    const updated = n.data.securityGroups.map((sg) =>
+                      sg.id === payload.id ? { ...payload } : sg
+                    );
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        securityGroups: updated
+                      }
+                    };
+                  }
+                  if (n.type === "ec2Node" && n.data?.securityGroup?.id === payload.id) {
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        securityGroup: payload
+                      }
+                    };
+                  }
+                  return n;
+                })
+              );
+              addLog(`Updated Security Group rules for: ${payload.name}`, "info");
+            } else if (action === "delete") {
+              setNodes((nds) =>
+                nds.map((n) => {
+                  if (n.type === "ec2Node" && n.data?.securityGroups) {
+                    const filtered = n.data.securityGroups.filter((sg) => sg.id !== payload);
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        hasCustomSecurityGroup: filtered.length > 0,
+                        securityGroups: filtered
+                      }
+                    };
+                  }
+                  if (n.type === "ec2Node" && n.data?.securityGroup?.id === payload) {
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        hasCustomSecurityGroup: false,
+                        securityGroup: null
+                      }
+                    };
+                  }
+                  return n;
+                })
+              );
+              addLog(`Deleted Security Group globally`, "warn");
+            }
+            takeSnapshot();
+          };
+
+          return (
+            <SgManagerModal
+              node={sgNode}
+              nodes={nodes}
+              onClose={() => {
+                setNodes((nds) =>
+                  nds.map((n) =>
+                    n.id === sgNode.id
+                      ? { ...n, data: { ...n.data, isSgPopupOpen: false } }
+                      : n
+                  )
+                );
+              }}
+              onUpdateSgs={handleUpdateSgs}
+            />
+          );
+        })()}
 
         {/* MORE INSTANCE TYPES MODAL */}
         {isInstanceModalOpen && selectedNode && selectedNode.type === "ec2Node" && (() => {
