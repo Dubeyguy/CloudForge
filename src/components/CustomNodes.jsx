@@ -12,6 +12,8 @@ import {
   Users,
   Shield,
   Key,
+  Network,
+  Globe,
 } from "lucide-react";
 
 export const ModeContext = React.createContext("dev");
@@ -60,9 +62,7 @@ export const AuditBadge = ({ data }) => {
 };
 
 export const ZoomedOutOverlay = ({ type, name, colorClass = "bg-amber-500", borderClass = "border-amber-500", isCard = false, circle = false }) => {
-  const zoom = useStore((s) => s.transform[2]);
-  const settings = React.useContext(SettingsContext);
-  const isZoomedOut = zoom < 0.65 && settings?.nodeOverlayZoomedOut !== false;
+  const isZoomedOut = false;
 
   if (!isZoomedOut) return null;
 
@@ -271,9 +271,7 @@ export const S3Node = ({ id, data, selected }) => {
 
 export const S3ObjectNode = ({ data, id }) => {
   const parentId = useStore((s) => s.nodes.find((n) => n.id === id)?.parentId);
-  const zoom = useStore((s) => s.transform[2]);
-  const settings = React.useContext(SettingsContext);
-  const isZoomedOut = zoom < 0.65 && settings?.nodeOverlayZoomedOut !== false;
+  const isZoomedOut = false;
 
   if (isZoomedOut && parentId) return null;
 
@@ -316,9 +314,7 @@ export const S3ObjectNode = ({ data, id }) => {
 
 export const IAMNode = ({ data, id }) => {
   const parentId = useStore((s) => s.nodes.find((n) => n.id === id)?.parentId);
-  const zoom = useStore((s) => s.transform[2]);
-  const settings = React.useContext(SettingsContext);
-  const isZoomedOut = zoom < 0.65 && settings?.nodeOverlayZoomedOut !== false;
+  const isZoomedOut = false;
 
   if (isZoomedOut && parentId) return null;
 
@@ -760,8 +756,49 @@ export const EC2Node = ({ id, data }) => {
   }
 
   return (
-    <div className={`bg-white dark:bg-zinc-900 border rounded-xl shadow-lg dark:shadow-xl w-[360px] flex flex-row overflow-hidden transition-all cursor-grab active:cursor-grabbing group relative ${borderClass} ${glowClass}`}>
-      <ZoomedOutOverlay type="EC2 Instance" name={data?.label} colorClass="bg-sky-500" borderClass="border-sky-500" isCard={true} />
+    <div className="relative w-[360px] group">
+      <div className={`bg-white dark:bg-zinc-900 border rounded-xl shadow-lg dark:shadow-xl w-full flex flex-row overflow-hidden transition-all cursor-grab active:cursor-grabbing ${borderClass} ${glowClass}`}>
+        <ZoomedOutOverlay type="EC2 Instance" name={data?.label} colorClass="bg-sky-500" borderClass="border-sky-500" isCard={true} />
+
+        {/* Left side: EC2 info */}
+        <div className="flex-1 p-3 flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-2 bg-sky-50 dark:bg-sky-500/10 rounded-lg text-sky-600 dark:text-sky-500 border border-sky-100 dark:border-sky-500/20 shadow-inner shrink-0">
+              <Cpu size={16} />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <h4 className="text-slate-800 dark:text-zinc-100 font-bold text-sm leading-tight tracking-wide truncate">
+                {data?.label || "EC2 Instance"}
+              </h4>
+              <p className="text-slate-400 dark:text-zinc-500 text-[10px] uppercase tracking-widest mt-0.5 font-semibold truncate">
+                Amazon EC2
+              </p>
+            </div>
+          </div>
+          <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded-md shadow-sm transition-colors ${isBudgetMode ? badgeClass : "bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-500/20"}`}>
+            {isBudgetMode ? `$${cost.toFixed(2)}/mo` : (data?.instanceType || "t2.micro")}
+          </span>
+        </div>
+
+        {/* Right side: Security Group info */}
+        <div 
+          onClick={handleSgClick}
+          className={`w-[130px] border-l border-slate-100 dark:border-zinc-800/80 p-3 flex flex-row items-center gap-2 hover:bg-slate-50 dark:hover:bg-zinc-800/40 cursor-pointer transition-colors nodrag select-none shrink-0`}
+        >
+          <div className={`p-1.5 rounded-md shrink-0 border ${hasCustomSg ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border-emerald-100 dark:border-emerald-500/20" : "bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 border-slate-100 dark:border-zinc-700/50"}`}>
+            <Shield size={14} />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-zinc-500">
+              Security Group
+            </span>
+            <span className={`text-xs font-bold truncate ${hasCustomSg ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-zinc-400"}`}>
+              {sgName}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <AuditBadge data={data} />
       <Handle
         type="source"
@@ -793,51 +830,200 @@ export const EC2Node = ({ id, data }) => {
         id="left"
         className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
       >
-        <div className="w-3 h-3 rounded-full bg-sky-500 border-2 border-white dark:border-zinc-900 shadow-md" />
       </Handle>
+    </div>
+  );
+};
 
-      {/* Left side: EC2 info */}
-      <div className="flex-1 p-3 flex items-center justify-between gap-2 min-w-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="p-2 bg-sky-50 dark:bg-sky-500/10 rounded-lg text-sky-600 dark:text-sky-500 border border-sky-100 dark:border-sky-500/20 shadow-inner shrink-0">
-            <Cpu size={16} />
+export const VPCNode = ({ id, data, selected }) => {
+  return (
+    <>
+      <NodeResizer
+        color="#6366f1"
+        isVisible={selected}
+        minWidth={350}
+        minHeight={250}
+      />
+      <div
+        className="w-full h-full relative border-4 border-dashed border-indigo-400/60 dark:border-indigo-500/40 bg-indigo-500/5 transition-colors hover:border-indigo-500 cursor-grab active:cursor-grabbing group rounded-3xl"
+      >
+        <ZoomedOutOverlay type="VPC" name={data?.label} colorClass="bg-indigo-500" borderClass="border-indigo-500" />
+        <Handle
+          type="source"
+          position={Position.Top}
+          id="top"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="right"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="bottom"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+        <Handle
+          type="source"
+          position={Position.Left}
+          id="left"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+
+        <div className="absolute top-5 left-5 right-5 flex items-center justify-between pointer-events-none select-none z-10 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0 pointer-events-auto">
+            <div className="p-2 bg-indigo-100 dark:bg-indigo-500/20 rounded-md text-indigo-600 dark:text-indigo-400 shrink-0">
+              <Network size={18} />
+            </div>
+            <span className="text-indigo-700 dark:text-indigo-300 font-extrabold text-sm uppercase tracking-widest truncate">
+              {data?.label || "VPC"}
+            </span>
           </div>
-          <div className="flex flex-col min-w-0">
-            <h4 className="text-slate-800 dark:text-zinc-100 font-bold text-sm leading-tight tracking-wide truncate">
-              {data?.label || "EC2 Instance"}
-            </h4>
-            <p className="text-slate-400 dark:text-zinc-500 text-[10px] uppercase tracking-widest mt-0.5 font-semibold truncate">
-              Amazon EC2
-            </p>
+
+          {data?.cidrBlock && (
+            <div className="pointer-events-auto shrink-0 bg-indigo-50/80 dark:bg-zinc-900/80 border border-indigo-200 dark:border-indigo-900/30 px-3 py-1 rounded-full text-indigo-700 dark:text-indigo-300 font-extrabold text-xs uppercase tracking-wider">
+              {data.cidrBlock}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+export const SubnetNode = ({ id, data, selected }) => {
+  return (
+    <>
+      <NodeResizer
+        color="#0d9488"
+        isVisible={selected}
+        minWidth={300}
+        minHeight={180}
+      />
+      <div
+        className="w-full h-full relative border-4 border-dashed border-teal-400/60 dark:border-teal-500/40 bg-teal-500/5 transition-colors hover:border-teal-500 cursor-grab active:cursor-grabbing group rounded-3xl"
+      >
+        <ZoomedOutOverlay type="Subnet" name={data?.label} colorClass="bg-teal-500" borderClass="border-teal-500" />
+        <Handle
+          type="source"
+          position={Position.Top}
+          id="top"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-teal-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="right"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-teal-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="bottom"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-teal-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+        <Handle
+          type="source"
+          position={Position.Left}
+          id="left"
+          className="opacity-0 group-hover:opacity-100 transition-opacity !w-12 !h-12 !bg-transparent !border-0 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-teal-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+        </Handle>
+
+        <div className="absolute top-5 left-5 right-5 flex items-center justify-between pointer-events-none select-none z-10 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0 pointer-events-auto">
+            <div className="p-2 bg-teal-100 dark:bg-teal-500/20 rounded-md text-teal-600 dark:text-teal-400 shrink-0">
+              <Layers size={18} />
+            </div>
+            <span className="text-teal-700 dark:text-teal-300 font-extrabold text-sm uppercase tracking-widest truncate">
+              {data?.label || "Subnet"}{data?.cidrBlock ? ` - ${data.cidrBlock}` : ""}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 pointer-events-auto shrink-0">
+            {data?.hasNatGateway && (
+              <span className="w-8 h-8 rounded-full border border-teal-200 dark:border-teal-800/80 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 text-[10px] font-black flex items-center justify-center shadow-sm select-none" title="NAT Gateway (NG)">
+                NG
+              </span>
+            )}
+            {data?.hasRouteTable !== false && (
+              <span className="w-8 h-8 rounded-full border border-teal-200 dark:border-teal-800/80 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 text-[10px] font-black flex items-center justify-center shadow-sm select-none" title="Route Table (RT)">
+                RT
+              </span>
+            )}
+            {data?.hasNetworkAcl !== false && (
+              <span className="w-8 h-8 rounded-full border border-teal-200 dark:border-teal-800/80 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 text-[10px] font-black flex items-center justify-center shadow-sm select-none" title="Network ACL (ACL)">
+                ACL
+              </span>
+            )}
           </div>
         </div>
-        <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded-md shadow-sm transition-colors ${isBudgetMode ? badgeClass : "bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-500/20"}`}>
-          {isBudgetMode ? `$${cost.toFixed(2)}/mo` : (data?.instanceType || "t2.micro")}
-        </span>
       </div>
+    </>
+  );
+};
 
-      {/* Right side: Security Group info */}
-      <div 
-        onClick={handleSgClick}
-        className={`w-[130px] border-l border-slate-100 dark:border-zinc-800/80 p-3 flex flex-row items-center gap-2 hover:bg-slate-50 dark:hover:bg-zinc-800/40 cursor-pointer transition-colors nodrag select-none shrink-0`}
+export const InternetGatewayNode = ({ data, id }) => {
+  const parentId = useStore((s) => s.nodes.find((n) => n.id === id)?.parentId);
+  const isZoomedOut = false;
+
+  if (isZoomedOut && parentId) return null;
+
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-4 shadow-lg dark:shadow-xl w-[280px] transition-all cursor-grab active:cursor-grabbing group relative hover:border-indigo-400 dark:hover:border-indigo-500/50">
+      <ZoomedOutOverlay type="Internet Gateway" name={data?.label} colorClass="bg-indigo-500" borderClass="border-indigo-500" isCard={true} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="top"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
       >
-        <div className={`p-1.5 rounded-md shrink-0 border ${hasCustomSg ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border-emerald-100 dark:border-emerald-500/20" : "bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 border-slate-100 dark:border-zinc-700/50"}`}>
-          <Shield size={14} />
+        <div className="w-3 h-3 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="bottom"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="p-2.5 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg text-indigo-600 dark:text-indigo-500 border border-indigo-100 dark:border-indigo-500/20 shadow-inner shrink-0">
+          <Globe size={20} />
         </div>
         <div className="flex flex-col min-w-0">
-          <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-zinc-500">
-            Security Group
-          </span>
-          <span className={`text-xs font-bold truncate ${hasCustomSg ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-zinc-400"}`}>
-            {sgName}
-          </span>
+          <h4 className="text-slate-800 dark:text-zinc-100 font-bold text-base leading-tight tracking-wide truncate">
+            {data?.label || "Internet Gateway"}
+          </h4>
+          <p className="text-slate-400 dark:text-zinc-500 text-[12px] uppercase tracking-widest mt-0.5 font-bold truncate">
+            AWS Gateway
+          </p>
         </div>
       </div>
     </div>
   );
 };
 
-export const nodeTypes = { s3Node: S3Node, s3ObjectNode: S3ObjectNode, shapeNode: ShapeNode, iamNode: IAMNode, iamGroupNode: IAMGroupNode, ec2Node: EC2Node };
+export const nodeTypes = { s3Node: S3Node, s3ObjectNode: S3ObjectNode, shapeNode: ShapeNode, iamNode: IAMNode, iamGroupNode: IAMGroupNode, ec2Node: EC2Node, vpcNode: VPCNode, subnetNode: SubnetNode, internetGatewayNode: InternetGatewayNode };
 
 export const defaultInitialNodes = [
   {

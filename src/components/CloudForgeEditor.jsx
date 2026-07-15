@@ -22,7 +22,7 @@ import {
   Activity, FolderOpen, Plus, AlertTriangle, FolderPlus, ArrowLeft, Clock, Settings, Moon, Sun,
   Sparkles, Save, Search, Square, Circle as CircleIcon, Type, Undo, Redo, User, Users, Key,
   Shield, Coins, Maximize2, Edit, File, Folder, Upload, Server, History, Cpu, ArrowUpRight,
-  ArrowUpDown, Edit3, Keyboard, BookOpen
+  ArrowUpDown, Edit3, Keyboard, BookOpen, Network, Globe, Compass, ShieldAlert
 } from "lucide-react";
 import { CustomSelect, RegionSelect, STANDARD_REGIONS } from "./CustomSelect";
 import { nodeTypes, ModeContext, SettingsContext, AuditBadge } from "./CustomNodes";
@@ -246,6 +246,556 @@ const SgRulesEditorSubView = ({ sg, onBack, onSave }) => {
             className="h-10 px-5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-xl shadow-sm hover:shadow transition-all"
           >
             Save Rules
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SubnetNatModal = ({ node, onClose, onUpdateNodeData }) => {
+  const [hasNat, setHasNat] = useState(!!node.data?.hasNatGateway);
+  const [connectivity, setConnectivity] = useState(node.data?.natConfig?.connectivityType || "public");
+  const [eip, setEip] = useState(node.data?.natConfig?.allocationId || "");
+
+  const handleAllocateEip = () => {
+    const randomId = `eipalloc-${Math.random().toString(16).substring(2, 18)}`;
+    setEip(randomId);
+  };
+
+  const handleSave = () => {
+    onUpdateNodeData("hasNatGateway", hasNat);
+    onUpdateNodeData("natConfig", hasNat ? { connectivityType: connectivity, allocationId: eip } : null);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center animate-fade-in p-4">
+      <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden animate-scale-up nodrag text-left font-sans">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 shrink-0">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-zinc-200">
+            <div className="p-1.5 bg-teal-100 dark:bg-teal-500/20 rounded-lg text-teal-600 dark:text-teal-400">
+              <Network size={18} />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm uppercase tracking-wide">NAT Gateway Configuration</h3>
+              <p className="text-[10px] text-slate-405 dark:text-zinc-550 mt-0.5 uppercase tracking-wider">Subnet: {node.data?.label || node.id}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 flex flex-col gap-5">
+          <div className="flex items-center justify-between bg-slate-50 dark:bg-zinc-900/40 p-4 rounded-xl border border-slate-150 dark:border-zinc-850">
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-slate-700 dark:text-zinc-200">Enable NAT Gateway</span>
+              <span className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5">Allows private subnet resources to connect to the internet</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={hasNat}
+              onChange={(e) => setHasNat(e.target.checked)}
+              className="accent-teal-500 h-5 w-5 rounded cursor-pointer"
+            />
+          </div>
+
+          {hasNat && (
+            <div className="flex flex-col gap-4 animate-fade-in">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">Connectivity Type</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-zinc-300 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="connectivity"
+                      value="public"
+                      checked={connectivity === "public"}
+                      onChange={() => setConnectivity("public")}
+                      className="accent-teal-500"
+                    />
+                    Public (Internet-facing)
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-zinc-300 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="connectivity"
+                      value="private"
+                      checked={connectivity === "private"}
+                      onChange={() => setConnectivity("private")}
+                      className="accent-teal-500"
+                    />
+                    Private (Internal VPC)
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">Elastic IP Allocation ID</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={eip}
+                    onChange={(e) => setEip(e.target.value)}
+                    placeholder="eipalloc-..."
+                    className="flex-1 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
+                  />
+                  <button
+                    onClick={handleAllocateEip}
+                    className="px-3 text-xs font-bold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/20 border border-teal-200 dark:border-teal-900/35 rounded-xl transition-all"
+                  >
+                    Allocate EIP
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 shrink-0">
+          <button onClick={onClose} className="h-10 px-4 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl transition-all">
+            Cancel
+          </button>
+          <button onClick={handleSave} className="h-10 px-5 text-xs font-bold text-white bg-teal-600 hover:bg-teal-500 rounded-xl shadow-sm transition-all">
+            Save Configuration
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SubnetRtModal = ({ node, onClose, onUpdateNodeData }) => {
+  const currentConfig = node.data?.routeTableConfig || { isCustom: false, routes: [] };
+  const [isCustom, setIsCustom] = useState(currentConfig.isCustom);
+  const [routes, setRoutes] = useState(
+    currentConfig.routes.length > 0
+      ? currentConfig.routes
+      : [{ destination: "10.0.0.0/16", target: "local" }]
+  );
+
+  const handleAddRoute = () => {
+    setRoutes([...routes, { destination: "0.0.0.0/0", target: "Internet Gateway" }]);
+  };
+
+  const handleRemoveRoute = (index) => {
+    setRoutes(routes.filter((_, i) => i !== index));
+  };
+
+  const handleRouteChange = (index, field, value) => {
+    setRoutes(
+      routes.map((r, i) => (i === index ? { ...r, [field]: value } : r))
+    );
+  };
+
+  const handleSave = () => {
+    onUpdateNodeData("hasRouteTable", true);
+    onUpdateNodeData("routeTableConfig", {
+      isCustom,
+      routes: isCustom ? routes : [{ destination: "10.0.0.0/16", target: "local" }]
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center animate-fade-in p-4">
+      <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden animate-scale-up nodrag text-left font-sans">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 shrink-0">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-zinc-200">
+            <div className="p-1.5 bg-teal-100 dark:bg-teal-500/20 rounded-lg text-teal-600 dark:text-teal-400">
+              <Compass size={18} />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm uppercase tracking-wide">Route Table Configuration</h3>
+              <p className="text-[10px] text-slate-400 dark:text-zinc-550 mt-0.5 uppercase tracking-wider">Subnet: {node.data?.label || node.id}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 flex flex-col gap-5 flex-1 overflow-y-auto max-h-[400px] custom-scrollbar">
+          <div className="flex flex-col gap-3 bg-slate-50 dark:bg-zinc-900/40 p-4 rounded-xl border border-slate-150 dark:border-zinc-850">
+            <label className="flex items-center gap-3 text-xs font-semibold text-slate-700 dark:text-zinc-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!isCustom}
+                onChange={() => setIsCustom(false)}
+                className="accent-teal-500 h-5 w-5 rounded"
+              />
+              <div>
+                <span>Use Default AWS Route Table rules</span>
+                <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-normal mt-0.5">Built according to standard AWS rules (Local VPC routing only)</p>
+              </div>
+            </label>
+            <div className="border-t border-slate-200 dark:border-zinc-800 my-1" />
+            <label className="flex items-center gap-3 text-xs font-semibold text-slate-700 dark:text-zinc-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isCustom}
+                onChange={() => setIsCustom(true)}
+                className="accent-teal-500 h-5 w-5 rounded"
+              />
+              <div>
+                <span>Create a custom configuration</span>
+                <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-normal mt-0.5">Allows adding custom routes for internet access, peer links, or NAT gateways</p>
+              </div>
+            </label>
+          </div>
+
+          {isCustom && (
+            <div className="flex flex-col gap-3 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[11px] font-bold text-slate-450 dark:text-zinc-500 uppercase tracking-wider">Routes List</h4>
+                <button
+                  onClick={handleAddRoute}
+                  className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-extrabold text-white bg-teal-600 hover:bg-teal-500 rounded-lg shadow-sm"
+                >
+                  <Plus size={10} /> Add Route
+                </button>
+              </div>
+
+              <div className="border border-slate-150 dark:border-zinc-850 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-zinc-900 border-b border-slate-150 dark:border-zinc-850 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                      <th className="p-3">Destination CIDR</th>
+                      <th className="p-3">Target</th>
+                      <th className="p-3 w-16 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {routes.map((route, index) => (
+                      <tr key={index} className="border-b border-slate-100 dark:border-zinc-900/50 last:border-0 bg-white dark:bg-zinc-950/40">
+                        <td className="p-3">
+                          <input
+                            type="text"
+                            value={route.destination}
+                            onChange={(e) => handleRouteChange(index, "destination", e.target.value)}
+                            className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
+                          />
+                        </td>
+                        <td className="p-3">
+                          <select
+                            value={route.target}
+                            onChange={(e) => handleRouteChange(index, "target", e.target.value)}
+                            className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
+                          >
+                            <option value="local">local</option>
+                            <option value="Internet Gateway">Internet Gateway</option>
+                            <option value="NAT Gateway">NAT Gateway</option>
+                            <option value="VPC Peering">VPC Peering</option>
+                          </select>
+                        </td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => handleRemoveRoute(index)}
+                            disabled={routes.length <= 1}
+                            className="p-1.5 text-slate-400 hover:text-rose-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 shrink-0">
+          <button onClick={onClose} className="h-10 px-4 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-850 rounded-xl transition-all">
+            Cancel
+          </button>
+          <button onClick={handleSave} className="h-10 px-5 text-xs font-bold text-white bg-teal-600 hover:bg-teal-500 rounded-xl shadow-sm transition-all">
+            Save Route Table
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SubnetNaclModal = ({ node, onClose, onUpdateNodeData }) => {
+  const currentConfig = node.data?.naclConfig || { isCustom: false, inboundRules: [], outboundRules: [] };
+  const [isCustom, setIsCustom] = useState(currentConfig.isCustom);
+  const [activeTab, setActiveTab] = useState("inbound");
+
+  const defaultInbound = [
+    { ruleNumber: 100, type: "All Traffic", protocol: "All", portRange: "All", source: "0.0.0.0/0", action: "Allow" },
+    { ruleNumber: "*", type: "All Traffic", protocol: "All", portRange: "All", source: "0.0.0.0/0", action: "Deny" }
+  ];
+  const defaultOutbound = [
+    { ruleNumber: 100, type: "All Traffic", protocol: "All", portRange: "All", destination: "0.0.0.0/0", action: "Allow" },
+    { ruleNumber: "*", type: "All Traffic", protocol: "All", portRange: "All", destination: "0.0.0.0/0", action: "Deny" }
+  ];
+
+  const [inboundRules, setInboundRules] = useState(
+    currentConfig.inboundRules.length > 0 ? currentConfig.inboundRules : defaultInbound
+  );
+  const [outboundRules, setOutboundRules] = useState(
+    currentConfig.outboundRules.length > 0 ? currentConfig.outboundRules : defaultOutbound
+  );
+
+  const handleAddRule = () => {
+    const newRule = { ruleNumber: 110, type: "HTTP (80)", protocol: "TCP", portRange: "80", source: "0.0.0.0/0", action: "Allow" };
+    if (activeTab === "inbound") {
+      const updated = [...inboundRules];
+      updated.splice(updated.length - 1, 0, newRule);
+      setInboundRules(updated);
+    } else {
+      const newOutRule = { ruleNumber: 110, type: "HTTP (80)", protocol: "TCP", portRange: "80", destination: "0.0.0.0/0", action: "Allow" };
+      const updated = [...outboundRules];
+      updated.splice(updated.length - 1, 0, newOutRule);
+      setOutboundRules(updated);
+    }
+  };
+
+  const handleRemoveRule = (index) => {
+    if (activeTab === "inbound") {
+      setInboundRules(inboundRules.filter((_, i) => i !== index));
+    } else {
+      setOutboundRules(outboundRules.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleRuleChange = (index, field, value) => {
+    const updater = (rules) =>
+      rules.map((r, i) => {
+        if (i !== index) return r;
+        if (field === "type") {
+          let protocol = "TCP";
+          let portRange = "80";
+          if (value === "HTTP (80)") { protocol = "TCP"; portRange = "80"; }
+          else if (value === "HTTPS (443)") { protocol = "TCP"; portRange = "443"; }
+          else if (value === "SSH (22)") { protocol = "TCP"; portRange = "22"; }
+          else if (value === "RDP (3389)") { protocol = "TCP"; portRange = "3389"; }
+          else if (value === "All Traffic") { protocol = "All"; portRange = "All"; }
+          else if (value === "Custom TCP") { protocol = "TCP"; portRange = "1024-65535"; }
+          return { ...r, type: value, protocol, portRange };
+        }
+        return { ...r, [field]: value };
+      });
+
+    if (activeTab === "inbound") {
+      setInboundRules(updater(inboundRules));
+    } else {
+      setOutboundRules(updater(outboundRules));
+    }
+  };
+
+  const handleSave = () => {
+    onUpdateNodeData("hasNetworkAcl", true);
+    onUpdateNodeData("naclConfig", {
+      isCustom,
+      inboundRules: isCustom ? inboundRules : defaultInbound,
+      outboundRules: isCustom ? outboundRules : defaultOutbound
+    });
+    onClose();
+  };
+
+  const rulesToRender = activeTab === "inbound" ? inboundRules : outboundRules;
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center animate-fade-in p-4">
+      <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-3xl flex flex-col shadow-2xl overflow-hidden animate-scale-up nodrag text-left font-sans">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 shrink-0">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-zinc-200">
+            <div className="p-1.5 bg-teal-100 dark:bg-teal-500/20 rounded-lg text-teal-600 dark:text-teal-400">
+              <ShieldAlert size={18} />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm uppercase tracking-wide">Network ACL Configuration</h3>
+              <p className="text-[10px] text-slate-405 dark:text-zinc-550 mt-0.5 uppercase tracking-wider">Subnet: {node.data?.label || node.id}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 flex flex-col gap-5 flex-1 overflow-y-auto max-h-[420px] custom-scrollbar">
+          <div className="flex flex-col gap-3 bg-slate-50 dark:bg-zinc-900/40 p-4 rounded-xl border border-slate-150 dark:border-zinc-850">
+            <label className="flex items-center gap-3 text-xs font-semibold text-slate-700 dark:text-zinc-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!isCustom}
+                onChange={() => setIsCustom(false)}
+                className="accent-teal-500 h-5 w-5 rounded"
+              />
+              <div>
+                <span>Use Default AWS Network ACL rules</span>
+                <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-normal mt-0.5">Allows all inbound and outbound traffic (AWS default subnet ruleset)</p>
+              </div>
+            </label>
+            <div className="border-t border-slate-200 dark:border-zinc-800 my-1" />
+            <label className="flex items-center gap-3 text-xs font-semibold text-slate-700 dark:text-zinc-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isCustom}
+                onChange={() => setIsCustom(true)}
+                className="accent-teal-500 h-5 w-5 rounded"
+              />
+              <div>
+                <span>Create a custom configuration</span>
+                <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-normal mt-0.5">Define custom stateless security rules for inbound and outbound traffic</p>
+              </div>
+            </label>
+          </div>
+
+          {isCustom && (
+            <div className="flex flex-col gap-3 animate-fade-in">
+              <div className="flex items-center justify-between border-b border-slate-150 dark:border-zinc-850 pb-1">
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => setActiveTab("inbound")}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      activeTab === "inbound"
+                        ? "bg-teal-50 text-teal-600 dark:bg-teal-950/20 dark:text-teal-400 border border-teal-100 dark:border-teal-900/25"
+                        : "text-slate-550 dark:text-zinc-450 hover:bg-slate-50 dark:hover:bg-zinc-900/30"
+                    }`}
+                  >
+                    Inbound Rules
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("outbound")}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      activeTab === "outbound"
+                        ? "bg-teal-50 text-teal-600 dark:bg-teal-950/20 dark:text-teal-400 border border-teal-100 dark:border-teal-900/25"
+                        : "text-slate-550 dark:text-zinc-450 hover:bg-slate-50 dark:hover:bg-zinc-900/30"
+                    }`}
+                  >
+                    Outbound Rules
+                  </button>
+                </div>
+                <button
+                  onClick={handleAddRule}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-extrabold text-white bg-teal-600 hover:bg-teal-500 rounded-lg shadow-sm"
+                >
+                  <Plus size={10} /> Add Rule
+                </button>
+              </div>
+
+              <div className="border border-slate-150 dark:border-zinc-850 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-zinc-900 border-b border-slate-150 dark:border-zinc-850 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                      <th className="p-2.5 w-16">Rule #</th>
+                      <th className="p-2.5">Type</th>
+                      <th className="p-2.5 w-20">Protocol</th>
+                      <th className="p-2.5 w-24">Port Range</th>
+                      <th className="p-2.5">{activeTab === "inbound" ? "Source" : "Destination"}</th>
+                      <th className="p-2.5 w-20">Action</th>
+                      <th className="p-2.5 w-12 text-center">Delete</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rulesToRender.map((rule, index) => {
+                      const isCatchAll = rule.ruleNumber === "*";
+                      return (
+                        <tr key={index} className="border-b border-slate-100 dark:border-zinc-900/50 last:border-0 bg-white dark:bg-zinc-950/40">
+                          <td className="p-2.5">
+                            <input
+                              type="text"
+                              value={rule.ruleNumber}
+                              disabled={isCatchAll}
+                              onChange={(e) => handleRuleChange(index, "ruleNumber", e.target.value)}
+                              className="bg-slate-50 dark:bg-zinc-900 disabled:opacity-60 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500 text-center font-semibold"
+                            />
+                          </td>
+                          <td className="p-2.5">
+                            <select
+                              value={rule.type}
+                              disabled={isCatchAll}
+                              onChange={(e) => handleRuleChange(index, "type", e.target.value)}
+                              className="bg-slate-50 dark:bg-zinc-900 disabled:opacity-60 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
+                            >
+                              <option value="All Traffic">All Traffic</option>
+                              <option value="HTTP (80)">HTTP (80)</option>
+                              <option value="HTTPS (443)">HTTPS (443)</option>
+                              <option value="SSH (22)">SSH (22)</option>
+                              <option value="RDP (3389)">RDP (3389)</option>
+                              <option value="Custom TCP">Custom TCP</option>
+                            </select>
+                          </td>
+                          <td className="p-2.5">
+                            <input
+                              type="text"
+                              value={rule.protocol}
+                              disabled={isCatchAll || rule.type !== "Custom TCP"}
+                              onChange={(e) => handleRuleChange(index, "protocol", e.target.value)}
+                              className="bg-slate-50 dark:bg-zinc-900 disabled:opacity-60 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 text-center focus:outline-none focus:border-teal-500"
+                            />
+                          </td>
+                          <td className="p-2.5">
+                            <input
+                              type="text"
+                              value={rule.portRange}
+                              disabled={isCatchAll || (rule.type !== "Custom TCP" && rule.type !== "All Traffic")}
+                              onChange={(e) => handleRuleChange(index, "portRange", e.target.value)}
+                              className="bg-slate-50 dark:bg-zinc-900 disabled:opacity-60 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
+                            />
+                          </td>
+                          <td className="p-2.5">
+                            <input
+                              type="text"
+                              value={activeTab === "inbound" ? rule.source : rule.destination}
+                              disabled={isCatchAll}
+                              onChange={(e) => handleRuleChange(index, activeTab === "inbound" ? "source" : "destination", e.target.value)}
+                              className="bg-slate-50 dark:bg-zinc-900 disabled:opacity-60 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
+                            />
+                          </td>
+                          <td className="p-2.5">
+                            <select
+                              value={rule.action}
+                              disabled={isCatchAll}
+                              onChange={(e) => handleRuleChange(index, "action", e.target.value)}
+                              className={`bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs font-semibold focus:outline-none focus:border-teal-500 ${
+                                rule.action === "Allow" ? "text-emerald-600 dark:text-emerald-500" : "text-rose-600 dark:text-rose-500"
+                              }`}
+                            >
+                              <option value="Allow">Allow</option>
+                              <option value="Deny">Deny</option>
+                            </select>
+                          </td>
+                          <td className="p-2.5 text-center">
+                            <button
+                              onClick={() => handleRemoveRule(index)}
+                              disabled={isCatchAll}
+                              className="p-1.5 text-slate-400 hover:text-rose-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-100 dark:border-zinc-900 bg-slate-50 dark:bg-zinc-900/20 shrink-0">
+          <button onClick={onClose} className="h-10 px-4 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl transition-all">
+            Cancel
+          </button>
+          <button onClick={handleSave} className="h-10 px-5 text-xs font-bold text-white bg-teal-600 hover:bg-teal-500 rounded-xl shadow-sm transition-all">
+            Save Network ACL
           </button>
         </div>
       </div>
@@ -880,6 +1430,140 @@ const reconstructCanvasFromCode = (code) => {
   return { nodes, edges };
 }
 
+const isValidParentForChild = (parentType, childType, childIamType = null) => {
+  if (parentType === "iamGroupNode" && childType === "iamNode" && childIamType === "User") return true;
+  if (parentType === "s3Node" && childType === "s3ObjectNode") return true;
+  if (parentType === "vpcNode" && childType === "subnetNode") return true;
+  if (parentType === "subnetNode" && childType === "ec2Node") return true;
+  return false;
+};
+
+const getGroupLayoutConfig = (parentType, childCount) => {
+  if (parentType === "vpcNode") {
+    // VPC hosts subnets (480x300) in a 2-column grid layout
+    const minHeight = 100 + Math.ceil(childCount / 2) * 325;
+    const minWidth = childCount > 1 ? 1035 : 530;
+    return {
+      minHeight: Math.max(500, minHeight),
+      minWidth: Math.max(650, minWidth),
+      getChildPosition: (index) => {
+        const row = Math.floor(index / 2);
+        const col = index % 2;
+        return { x: 25 + col * 505, y: 80 + row * 325 };
+      }
+    };
+  }
+  if (parentType === "subnetNode") {
+    // Subnet hosts EC2 instances (360x70) in a 1-column vertical stack
+    const minHeight = 120 + childCount * 100;
+    const minWidth = 480;
+    return {
+      minHeight: Math.max(300, minHeight),
+      minWidth: Math.max(480, minWidth),
+      getChildPosition: (index) => {
+        // Center the EC2 nodes inside the 480px width subnet container
+        // EC2 is 360px wide, so offset is (480 - 360) / 2 = 60px!
+        return { x: 60, y: 80 + index * 100 };
+      }
+    };
+  }
+  // Default for S3 Bucket / IAM Group
+  const minHeight = 100 + Math.ceil(childCount / 2) * 80;
+  const minWidth = childCount > 1 ? 500 : 280;
+  return {
+    minHeight: Math.max(200, minHeight),
+    minWidth: Math.max(300, minWidth),
+    getChildPosition: (index) => {
+      const row = Math.floor(index / 2);
+      const col = index % 2;
+      return { x: 20 + col * 240, y: 60 + row * 80 };
+    }
+  };
+};
+const layoutSubnetsInVpc = (vpcId, nds) => {
+  // Find all subnets belonging to this VPC
+  const subnets = nds.filter((n) => n.parentId === vpcId && n.type === "subnetNode");
+  
+  // Divide subnets into 2 columns:
+  // Column 0: subnets[0], subnets[2], subnets[4]...
+  // Column 1: subnets[1], subnets[3], subnets[5]...
+  const col0 = [];
+  const col1 = [];
+  subnets.forEach((sub, idx) => {
+    if (idx % 2 === 0) col0.push(sub);
+    else col1.push(sub);
+  });
+
+  // Helper to layout a single column and return total height used
+  const layoutColumn = (colSubnets, startX) => {
+    let currentY = 80; // Offset below VPC header
+    colSubnets.forEach((sub) => {
+      // Find EC2 instances inside this subnet
+      const ec2Count = nds.filter((n) => n.parentId === sub.id && n.type === "ec2Node").length;
+      const subnetHeight = Math.max(300, 120 + ec2Count * 100);
+      
+      sub.tempHeight = subnetHeight;
+      sub.tempPosition = { x: startX, y: currentY };
+      
+      currentY += subnetHeight + 25; // 25px gap
+    });
+    return currentY;
+  };
+
+  const col0Height = layoutColumn(col0, 25);
+  const col1Height = layoutColumn(col1, 530); // 480px width + 25px spacing + 25px margin = 530px
+
+  const maxColHeight = Math.max(col0Height, col1Height);
+  const vpcHeight = Math.max(500, maxColHeight + 25); // 25px bottom padding
+  const vpcWidth = subnets.length > 1 ? 1035 : 530;
+
+  const subnetIds = subnets.map((s) => s.id);
+  const ec2Instances = nds.filter((n) => n.parentId && subnetIds.includes(n.parentId) && n.type === "ec2Node");
+
+  return nds.map((n) => {
+    if (n.id === vpcId) {
+      return {
+        ...n,
+        style: {
+          ...n.style,
+          height: vpcHeight,
+          width: vpcWidth,
+        }
+      };
+    }
+    const matchingSubnet = subnets.find((sub) => sub.id === n.id);
+    if (matchingSubnet && matchingSubnet.tempPosition) {
+      return {
+        ...n,
+        position: matchingSubnet.tempPosition,
+        style: {
+          ...n.style,
+          width: 480,
+          height: matchingSubnet.tempHeight,
+        }
+      };
+    }
+    // Auto-center and stack EC2 nodes inside the VPC subnets
+    if (n.type === "ec2Node" && n.parentId && subnetIds.includes(n.parentId)) {
+      const siblings = ec2Instances.filter((e) => e.parentId === n.parentId);
+      const childIndex = siblings.findIndex((e) => e.id === n.id);
+      return {
+        ...n,
+        position: { x: 60, y: 80 + childIndex * 100 }
+      };
+    }
+    return n;
+  });
+};
+
+const layoutAllVpcs = (nds) => {
+  const vpcs = nds.filter((n) => n.type === "vpcNode");
+  let updated = [...nds];
+  vpcs.forEach((vpc) => {
+    updated = layoutSubnetsInVpc(vpc.id, updated);
+  });
+  return updated;
+};
 // ==========================================
 // 3. MAIN APP: The Floating Editor
 // ==========================================
@@ -1114,6 +1798,7 @@ export default function CloudForgeEditor({
   const [editingDeploymentId, setEditingDeploymentId] = useState(null);
   const [editNameValue, setEditNameValue] = useState("");
   const [toast, setToast] = useState(null);
+  const [activeSubnetModal, setActiveSubnetModal] = useState(null); // null | 'nat' | 'rt' | 'nacl'
 
   useEffect(() => {
     if (toast) {
@@ -1302,6 +1987,7 @@ export default function CloudForgeEditor({
     iam: true,
     compute: true,
     shapes: false,
+    networking: true,
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [nodePaletteSearch, setNodePaletteSearch] = useState("");
@@ -1908,35 +2594,39 @@ export default function CloudForgeEditor({
     const nextNodesFiltered = nds.filter((n) => n.id !== nodeId);
 
     if (parentId) {
+      const parentNode = nds.find((n) => n.id === parentId);
       const remainingChildren = nextNodesFiltered.filter((n) => n.parentId === parentId);
-      const newChildrenCount = remainingChildren.length;
+      
+      const isGridGroup = parentNode.type === "iamGroupNode" || parentNode.type === "s3Node" || parentNode.type === "subnetNode";
 
-      const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
-      const newWidth = newChildrenCount > 1 ? 500 : 300;
+      let updatedNodes = nextNodesFiltered;
+      if (isGridGroup) {
+        const cfg = getGroupLayoutConfig(parentNode.type, remainingChildren.length);
+        updatedNodes = nextNodesFiltered.map((n) => {
+          if (n.id === parentId) {
+            return {
+              ...n,
+              style: {
+                ...n.style,
+                height: cfg.minHeight,
+                width: cfg.minWidth,
+              }
+            };
+          }
+          if (n.parentId === parentId) {
+            const childIndex = remainingChildren.findIndex(child => child.id === n.id);
+            return {
+              ...n,
+              position: cfg.getChildPosition(childIndex)
+            };
+          }
+          return n;
+        });
+      }
 
-      return nextNodesFiltered.map((n) => {
-        if (n.id === parentId) {
-          return {
-            ...n,
-            style: {
-              ...n.style,
-              height: newHeight,
-              width: newWidth,
-            }
-          };
-        }
-        if (n.parentId === parentId) {
-          const childIndex = remainingChildren.findIndex(child => child.id === n.id);
-          const row = Math.floor(childIndex / 2);
-          const col = childIndex % 2;
-          return {
-            ...n,
-            position: { x: 20 + col * 240, y: 60 + row * 80 }
-          };
-        }
-        return n;
-      });
+      return layoutAllVpcs(updatedNodes);
     }
+
     return nextNodesFiltered;
   }, []);
 
@@ -1944,230 +2634,197 @@ export default function CloudForgeEditor({
     (event, node) => {
       const internalNode = getNode(node.id);
 
-      // Handle detaching from group if dragged outside its parent
+      // Find if there is a valid parent node under the drag coordinates
+      const intersections = getIntersectingNodes(node);
+      const validNewParent = intersections.find((n) => 
+        isValidParentForChild(n.type, node.type, node.data?.iamType)
+      );
+
+      // Handle node that has a current parent
       if (node.parentId) {
         const parentGroupNode = getNode(node.parentId);
         if (parentGroupNode) {
-          const intersections = getIntersectingNodes(node).map((n) => n.id);
-          if (!intersections.includes(parentGroupNode.id)) {
+          if (validNewParent && validNewParent.id === node.parentId) {
+            // Moved within same parent -> re-snap to correct grid slot
             setNodes((nds) => {
-              const remainingChildren = nds.filter((n) => n.parentId === parentGroupNode.id && n.id !== node.id);
-              const newChildrenCount = remainingChildren.length;
-              const minHeight = 100 + Math.ceil(newChildrenCount / 2) * 80;
-              const minWidth = newChildrenCount > 1 ? 500 : 280;
-
-              return nds.map((n) => {
-                if (n.id === node.id) {
-                  const { parentId, extent, ...rest } = n;
+              const children = nds.filter((n) => n.parentId === node.parentId);
+              const cfg = getGroupLayoutConfig(parentGroupNode.type, children.length);
+              const updated = nds.map((n) => {
+                if (n.parentId === node.parentId) {
+                  const childIndex = children.findIndex(child => child.id === n.id);
                   return {
-                    ...rest,
-                    // Use the exact absolute position from React Flow's internal store
-                    position: internalNode?.positionAbsolute || {
-                      x: parentGroupNode.position.x + node.position.x,
-                      y: parentGroupNode.position.y + node.position.y,
-                    },
+                    ...n,
+                    position: cfg.getChildPosition(childIndex)
                   };
                 }
+                return n;
+              });
+              return layoutAllVpcs(updated);
+            });
+            addLog(`Position updated within group`, "info");
+            return;
+          } else {
+            // Dragged OUTSIDE current parent -> either transition to new parent or detach to canvas
+            setNodes((nds) => {
+              const oldParentId = node.parentId;
+              const oldParentNode = nds.find((n) => n.id === oldParentId);
+              const oldRemainingChildren = nds.filter((n) => n.parentId === oldParentId && n.id !== node.id);
 
-                if (n.id === parentGroupNode.id) {
-                  const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
-                  const newWidth = newChildrenCount > 1 ? 500 : 300;
+              const newParentId = validNewParent?.id || null;
+              const newChildren = newParentId ? nds.filter((n) => n.parentId === newParentId) : [];
+
+              const updatedNodes = nds.map((n) => {
+                // Dragged node
+                if (n.id === node.id) {
+                  if (newParentId) {
+                    const cfg = getGroupLayoutConfig(validNewParent.type, newChildren.length + 1);
+                    return {
+                      ...n,
+                      parentId: newParentId,
+                      position: cfg.getChildPosition(newChildren.length),
+                      ...(validNewParent.type === "vpcNode" ? { extent: "parent" } : { extent: undefined }),
+                    };
+                  } else {
+                    const { parentId, extent, ...rest } = n;
+                    return {
+                      ...rest,
+                      position: internalNode?.positionAbsolute || {
+                        x: oldParentNode.position.x + node.position.x,
+                        y: oldParentNode.position.y + node.position.y,
+                      },
+                    };
+                  }
+                }
+
+                // Old parent container resize
+                if (n.id === oldParentId) {
+                  const cfg = getGroupLayoutConfig(oldParentNode.type, oldRemainingChildren.length);
                   return {
                     ...n,
                     style: {
                       ...n.style,
-                      height: newHeight,
-                      width: newWidth,
+                      height: cfg.minHeight,
+                      width: cfg.minWidth,
                     }
                   };
                 }
 
-                if (n.parentId === parentGroupNode.id) {
-                  const childIndex = remainingChildren.findIndex(child => child.id === n.id);
-                  const row = Math.floor(childIndex / 2);
-                  const col = childIndex % 2;
+                // Old parent remaining children reflow
+                if (n.parentId === oldParentId) {
+                  const idx = oldRemainingChildren.findIndex((child) => child.id === n.id);
+                  const cfg = getGroupLayoutConfig(oldParentNode.type, oldRemainingChildren.length);
                   return {
                     ...n,
-                    position: { x: 20 + col * 240, y: 60 + row * 80 }
+                    position: cfg.getChildPosition(idx),
+                  };
+                }
+
+                // New parent container resize
+                if (newParentId && n.id === newParentId) {
+                  const cfg = getGroupLayoutConfig(validNewParent.type, newChildren.length + 1);
+                  return {
+                    ...n,
+                    style: {
+                      ...n.style,
+                      height: cfg.minHeight,
+                      width: cfg.minWidth,
+                    }
+                  };
+                }
+
+                // New parent existing children reflow
+                if (newParentId && n.parentId === newParentId) {
+                  const idx = newChildren.findIndex((child) => child.id === n.id);
+                  const cfg = getGroupLayoutConfig(validNewParent.type, newChildren.length + 1);
+                  return {
+                    ...n,
+                    position: cfg.getChildPosition(idx),
                   };
                 }
 
                 return n;
               });
+
+              const targetNode = updatedNodes.find((n) => n.id === node.id);
+              const withoutTarget = updatedNodes.filter((n) => n.id !== node.id);
+              return layoutAllVpcs([...withoutTarget, targetNode]);
             });
-            addLog(`User detached from IAM Group`, "info");
-            return;
-          } else {
-            // Snapped user was moved within the group shape - re-snap it to its grid slot
-            setNodes((nds) => {
-              const children = nds.filter((n) => n.parentId === parentGroupNode.id);
-              return nds.map((n) => {
-                if (n.parentId === parentGroupNode.id) {
-                  const childIndex = children.findIndex(child => child.id === n.id);
-                  const row = Math.floor(childIndex / 2);
-                  const col = childIndex % 2;
-                  return {
-                    ...n,
-                    position: { x: 20 + col * 240, y: 60 + row * 80 }
-                  };
-                }
-                return n;
-              });
-            });
-            addLog(`Snapped user position reset`, "info");
+
+            if (newParentId) {
+              setEdges((eds) =>
+                eds.filter(
+                  (e) =>
+                    !(
+                      (e.source === node.id && e.target === newParentId) ||
+                      (e.source === newParentId && e.target === node.id)
+                    )
+                )
+              );
+              addLog(`Component moved from old parent directly to new parent group`, "success");
+            } else {
+              addLog(`${node.type === "subnetNode" ? "Subnet" : node.type === "ec2Node" ? "EC2" : "Component"} detached from parent group`, "info");
+            }
             return;
           }
         }
       }
 
-      // Handle dropping into IAM Group
-      if (node.type === "iamNode" && node.data?.iamType === "User") {
-        const intersections = getIntersectingNodes(node).filter(
-          (n) => n.type === "iamGroupNode"
+      // Handle node that starts free on the canvas and is dropped into a group
+      if (!node.parentId && validNewParent) {
+        const newParentId = validNewParent.id;
+        setNodes((nds) => {
+          const newChildren = nds.filter((n) => n.parentId === newParentId);
+          const cfg = getGroupLayoutConfig(validNewParent.type, newChildren.length + 1);
+
+          const updatedNodes = nds.map((n) => {
+            if (n.id === newParentId) {
+              return {
+                ...n,
+                style: {
+                  ...n.style,
+                  height: cfg.minHeight,
+                  width: cfg.minWidth,
+                },
+              };
+            }
+
+            if (n.parentId === newParentId) {
+              const idx = newChildren.findIndex((child) => child.id === n.id);
+              return {
+                ...n,
+                position: cfg.getChildPosition(idx),
+              };
+            }
+
+            if (n.id === node.id) {
+              return {
+                ...n,
+                parentId: newParentId,
+                position: cfg.getChildPosition(newChildren.length),
+                ...(validNewParent.type === "vpcNode" ? { extent: "parent" } : { extent: undefined }),
+              };
+            }
+
+            return n;
+          });
+
+          const targetNode = updatedNodes.find((n) => n.id === node.id);
+          const withoutTarget = updatedNodes.filter((n) => n.id !== node.id);
+          return layoutAllVpcs([...withoutTarget, targetNode]);
+        });
+
+        setEdges((eds) =>
+          eds.filter(
+            (e) =>
+              !(
+                (e.source === node.id && e.target === newParentId) ||
+                (e.source === newParentId && e.target === node.id)
+              )
+          )
         );
 
-        if (intersections.length > 0 && !node.parentId) {
-          const groupNode = intersections[0];
-
-          setNodes((nds) => {
-            const currentChildren = nds.filter(
-              (n) => n.parentId === groupNode.id
-            );
-
-            const newChildrenCount = currentChildren.length + 1;
-            const minHeight = 100 + Math.ceil(newChildrenCount / 2) * 80;
-            const minWidth = newChildrenCount > 1 ? 500 : 280;
-
-            const updatedNodes = nds.map((n) => {
-              // Expand group node if it has many children
-              if (n.id === groupNode.id) {
-                const currentHeight = n.style?.height || 200;
-                const currentWidth = n.style?.width || 250;
-                return {
-                  ...n,
-                  style: {
-                    ...n.style,
-                    height: Math.max(currentHeight, minHeight),
-                    width: Math.max(currentWidth, minWidth),
-                  },
-                };
-              }
-
-              // Relayout existing children to ensure no gaps
-              if (n.parentId === groupNode.id) {
-                const childIndex = currentChildren.findIndex(child => child.id === n.id);
-                const row = Math.floor(childIndex / 2);
-                const col = childIndex % 2;
-                return {
-                  ...n,
-                  position: { x: 20 + col * 240, y: 60 + row * 80 },
-                };
-              }
-
-              // Snap newly added user node inside to its designated grid slot
-              if (n.id === node.id) {
-                const childIndex = currentChildren.length;
-                const row = Math.floor(childIndex / 2);
-                const col = childIndex % 2;
-                return {
-                  ...n,
-                  parentId: groupNode.id,
-                  position: { x: 20 + col * 240, y: 60 + row * 80 },
-                };
-              }
-
-              return n;
-            });
-
-            // React Flow requires child nodes to appear AFTER their parent nodes in the array.
-            const targetNode = updatedNodes.find((n) => n.id === node.id);
-            const withoutTarget = updatedNodes.filter((n) => n.id !== node.id);
-            return [...withoutTarget, targetNode];
-          });
-          setEdges((eds) =>
-            eds.filter(
-              (e) =>
-                !(
-                  (e.source === node.id && e.target === groupNode.id) ||
-                  (e.source === groupNode.id && e.target === node.id)
-                )
-            )
-          );
-          addLog(`User grouped into IAM Group`, "success");
-        }
-      }
-
-      // Handle dropping into S3 Bucket (s3Node)
-      if (node.type === "s3ObjectNode") {
-        const intersections = getIntersectingNodes(node).filter(
-          (n) => n.type === "s3Node"
-        );
-
-        if (intersections.length > 0 && !node.parentId) {
-          const groupNode = intersections[0];
-
-          setNodes((nds) => {
-            const currentChildren = nds.filter(
-              (n) => n.parentId === groupNode.id
-            );
-
-            const newChildrenCount = currentChildren.length + 1;
-            const minHeight = 100 + Math.ceil(newChildrenCount / 2) * 80;
-            const minWidth = newChildrenCount > 1 ? 500 : 280;
-
-            const updatedNodes = nds.map((n) => {
-              if (n.id === groupNode.id) {
-                const currentHeight = n.style?.height || 200;
-                const currentWidth = n.style?.width || 250;
-                return {
-                  ...n,
-                  style: {
-                    ...n.style,
-                    height: Math.max(currentHeight, minHeight),
-                    width: Math.max(currentWidth, minWidth),
-                  },
-                };
-              }
-
-              if (n.parentId === groupNode.id) {
-                const childIndex = currentChildren.findIndex(child => child.id === n.id);
-                const row = Math.floor(childIndex / 2);
-                const col = childIndex % 2;
-                return {
-                  ...n,
-                  position: { x: 20 + col * 240, y: 60 + row * 80 },
-                };
-              }
-
-              if (n.id === node.id) {
-                const childIndex = currentChildren.length;
-                const row = Math.floor(childIndex / 2);
-                const col = childIndex % 2;
-                return {
-                  ...n,
-                  parentId: groupNode.id,
-                  position: { x: 20 + col * 240, y: 60 + row * 80 },
-                };
-              }
-
-              return n;
-            });
-
-            const targetNode = updatedNodes.find((n) => n.id === node.id);
-            const withoutTarget = updatedNodes.filter((n) => n.id !== node.id);
-            return [...withoutTarget, targetNode];
-          });
-          setEdges((eds) =>
-            eds.filter(
-              (e) =>
-                !(
-                  (e.source === node.id && e.target === groupNode.id) ||
-                  (e.source === groupNode.id && e.target === node.id)
-                )
-            )
-          );
-          addLog(`S3 Object grouped into S3 Bucket`, "success");
-        }
+        addLog(`Component nested inside parent group`, "success");
+        return;
       }
     },
     [getIntersectingNodes, getNode, setNodes, setEdges, addLog]
@@ -2447,7 +3104,13 @@ export default function CloudForgeEditor({
   const spawnNode = useCallback((nodeType, labelType, position) => {
     takeSnapshot();
     const getNodeDimensions = (type, label) => {
-      if (type === "s3ObjectNode" || type === "ec2Node" || type === "iamNode") {
+      if (type === "vpcNode") {
+        return { w: 600, h: 400 };
+      }
+      if (type === "subnetNode") {
+        return { w: 400, h: 250 };
+      }
+      if (type === "s3ObjectNode" || type === "ec2Node" || type === "iamNode" || type === "internetGatewayNode") {
         return { w: 220, h: 70 };
       }
       if (type === "iamGroupNode" || type === "s3Node" || label === "Group") {
@@ -2549,6 +3212,123 @@ export default function CloudForgeEditor({
         style: { width: 300, height: 200 },
       };
       addLog(`➕ Added S3 Bucket.`, "info");
+    } else if (nodeType === "vpcNode") {
+      newNode = {
+        id: `vpc_${Date.now()}`,
+        type: "vpcNode",
+        data: {
+          label: `vpc-${Math.floor(Math.random() * 1000)}`,
+          region: userSettings.defaultRegion,
+          cidrBlock: "10.0.0.0/16",
+        },
+        position: resolvedPosition,
+        zIndex: -1,
+        style: { width: 650, height: 500 },
+      };
+      addLog(`➕ Added VPC.`, "info");
+    } else if (nodeType === "subnetNode") {
+      let parentGroupId = null;
+      if (position) {
+        const vpcNode = nodes.find((n) => {
+          if (n.type !== "vpcNode") return false;
+          const gx = n.position.x;
+          const gy = n.position.y;
+          const gw = n.style?.width || 600;
+          const gh = n.style?.height || 400;
+
+          // Compute cursor center (offset top-left by -200, -125 in onDrop, so add them back)
+          const cx = resolvedPosition.x + 200;
+          const cy = resolvedPosition.y + 125;
+          return cx >= gx && cx <= gx + gw && cy >= gy && cy <= gy + gh;
+        });
+
+        if (vpcNode) {
+          parentGroupId = vpcNode.id;
+        }
+      }
+
+      if (parentGroupId) {
+        const subnetId = `subnet_${Date.now()}`;
+        setNodes((nds) => {
+          const currentChildren = nds.filter((n) => n.parentId === parentGroupId);
+          const newChildrenCount = currentChildren.length + 1;
+          const cfg = getGroupLayoutConfig("vpcNode", newChildrenCount);
+
+          const subnetNode = {
+            id: subnetId,
+            type: "subnetNode",
+            data: {
+              label: `subnet-${Math.floor(Math.random() * 1000)}`,
+              region: userSettings.defaultRegion,
+              cidrBlock: "10.0.1.0/24",
+              hasNatGateway: false,
+              hasRouteTable: true,
+              hasNetworkAcl: true,
+            },
+            parentId: parentGroupId,
+            position: cfg.getChildPosition(currentChildren.length),
+            zIndex: -1,
+            style: { width: 480, height: 300 },
+            extent: "parent",
+          };
+
+          const updatedNodes = nds.map((n) => {
+            if (n.id === parentGroupId) {
+              return {
+                ...n,
+                style: {
+                  ...n.style,
+                  height: cfg.minHeight,
+                  width: cfg.minWidth,
+                },
+              };
+            }
+            if (n.parentId === parentGroupId) {
+              const idx = currentChildren.findIndex(child => child.id === n.id);
+              return {
+                ...n,
+                position: cfg.getChildPosition(idx),
+              };
+            }
+            return n;
+          });
+
+          const withoutSubnet = updatedNodes.filter((n) => n.id !== subnetNode.id);
+          return [...withoutSubnet, subnetNode];
+        });
+        setSelectedNodeId(subnetId);
+        addLog(`➕ Added Subnet (Grouped).`, "success");
+        return;
+      } else {
+        newNode = {
+          id: `subnet_${Date.now()}`,
+          type: "subnetNode",
+          data: {
+            label: `subnet-${Math.floor(Math.random() * 1000)}`,
+            region: userSettings.defaultRegion,
+            cidrBlock: "10.0.1.0/24",
+            hasNatGateway: false,
+            hasRouteTable: true,
+            hasNetworkAcl: true,
+          },
+          position: resolvedPosition,
+          zIndex: -1,
+          style: { width: 480, height: 300 },
+        };
+        addLog(`➕ Added Subnet.`, "info");
+      }
+    } else if (nodeType === "internetGatewayNode") {
+      newNode = {
+        id: `igw_${Date.now()}`,
+        type: "internetGatewayNode",
+        data: {
+          label: `igw-${Math.floor(Math.random() * 1000)}`,
+          region: userSettings.defaultRegion,
+        },
+        position: resolvedPosition,
+        zIndex: 0,
+      };
+      addLog(`➕ Added Internet Gateway.`, "info");
     } else if (nodeType === "s3ObjectNode") {
       let parentGroupId = null;
       if (position) {
@@ -2647,23 +3427,110 @@ export default function CloudForgeEditor({
         addLog(`➕ Added S3 Object.`, "info");
       }
     } else if (nodeType === "ec2Node") {
-      newNode = {
-        id: `ec2_${Date.now()}`,
-        type: "ec2Node",
-        data: {
-          label: `new-instance-${Math.floor(Math.random() * 1000)}`,
-          region: userSettings.defaultRegion,
-          instanceType: "t2.micro",
-          osImage: "amazon-linux-2023",
-          platform: "Linux",
-          ami: OS_IMAGES.find(img => img.id === "amazon-linux-2023")?.defaultAmis[userSettings.defaultRegion.toLowerCase()] || "ami-04b70fa74e45c3917",
-          volumeSize: 8,
-          cost: calculateEC2Cost("t2.micro", 8, userSettings.defaultRegion, "Linux"),
-        },
-        position: resolvedPosition,
-        zIndex: 0,
-      };
-      addLog(`➕ Added EC2 Instance.`, "info");
+      let parentGroupId = null;
+      if (position) {
+        const subnetNode = nodes.find((n) => {
+          if (n.type !== "subnetNode") return false;
+          // Get absolute position of the Subnet in case it is nested inside a VPC
+          const getAbsPos = (node) => {
+            let x = node.position.x;
+            let y = node.position.y;
+            let curr = node;
+            while (curr.parentId) {
+              const parent = nodes.find((p) => p.id === curr.parentId);
+              if (!parent) break;
+              x += parent.position.x;
+              y += parent.position.y;
+              curr = parent;
+            }
+            return { x, y };
+          };
+          const pos = getAbsPos(n);
+          const gw = n.style?.width || 400;
+          const gh = n.style?.height || 250;
+
+          // Compute cursor center (offset top-left by -110, -35 in onDrop, so add them back)
+          const cx = resolvedPosition.x + 110;
+          const cy = resolvedPosition.y + 35;
+          return cx >= pos.x && cx <= pos.x + gw && cy >= pos.y && cy <= pos.y + gh;
+        });
+
+        if (subnetNode) {
+          parentGroupId = subnetNode.id;
+        }
+      }
+
+      if (parentGroupId) {
+        const ec2Id = `ec2_${Date.now()}`;
+        setNodes((nds) => {
+          const currentChildren = nds.filter((n) => n.parentId === parentGroupId);
+          const newChildrenCount = currentChildren.length + 1;
+          const cfg = getGroupLayoutConfig("subnetNode", newChildrenCount);
+
+          const ec2Node = {
+            id: ec2Id,
+            type: "ec2Node",
+            data: {
+              label: `new-instance-${Math.floor(Math.random() * 1000)}`,
+              region: userSettings.defaultRegion,
+              instanceType: "t2.micro",
+              osImage: "amazon-linux-2023",
+              platform: "Linux",
+              ami: OS_IMAGES.find(img => img.id === "amazon-linux-2023")?.defaultAmis[userSettings.defaultRegion.toLowerCase()] || "ami-04b70fa74e45c3917",
+              volumeSize: 8,
+              cost: calculateEC2Cost("t2.micro", 8, userSettings.defaultRegion, "Linux"),
+            },
+            parentId: parentGroupId,
+            position: cfg.getChildPosition(currentChildren.length),
+            zIndex: 0,
+          };
+
+          const updatedNodes = nds.map((n) => {
+            if (n.id === parentGroupId) {
+              return {
+                ...n,
+                style: {
+                  ...n.style,
+                  height: cfg.minHeight,
+                  width: cfg.minWidth,
+                },
+              };
+            }
+            if (n.parentId === parentGroupId) {
+              const idx = currentChildren.findIndex(child => child.id === n.id);
+              return {
+                ...n,
+                position: cfg.getChildPosition(idx),
+              };
+            }
+            return n;
+          });
+
+          const withoutEc2 = updatedNodes.filter((n) => n.id !== ec2Node.id);
+          return [...withoutEc2, ec2Node];
+        });
+        setSelectedNodeId(ec2Id);
+        addLog(`➕ Added EC2 Instance (Grouped).`, "success");
+        return;
+      } else {
+        newNode = {
+          id: `ec2_${Date.now()}`,
+          type: "ec2Node",
+          data: {
+            label: `new-instance-${Math.floor(Math.random() * 1000)}`,
+            region: userSettings.defaultRegion,
+            instanceType: "t2.micro",
+            osImage: "amazon-linux-2023",
+            platform: "Linux",
+            ami: OS_IMAGES.find(img => img.id === "amazon-linux-2023")?.defaultAmis[userSettings.defaultRegion.toLowerCase()] || "ami-04b70fa74e45c3917",
+            volumeSize: 8,
+            cost: calculateEC2Cost("t2.micro", 8, userSettings.defaultRegion, "Linux"),
+          },
+          position: resolvedPosition,
+          zIndex: 0,
+        };
+        addLog(`➕ Added EC2 Instance.`, "info");
+      }
     } else if (nodeType === "iamNode" || nodeType === "iamGroupNode") {
       const type = labelType; // "User", "Group", "Role", "Policy"
 
@@ -2801,6 +3668,9 @@ export default function CloudForgeEditor({
   const addNewEC2Node = () => spawnNode("ec2Node");
   const addNewIAMNode = (type) => spawnNode(type === "Group" ? "iamGroupNode" : "iamNode", type);
   const addNewShape = (type) => spawnNode("shapeNode", type);
+  const addNewVpcNode = () => spawnNode("vpcNode");
+  const addNewSubnetNode = () => spawnNode("subnetNode");
+  const addNewInternetGatewayNode = () => spawnNode("internetGatewayNode");
 
   const onDragStart = (event, nodeType, labelType) => {
     event.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, labelType }));
@@ -2831,12 +3701,18 @@ export default function CloudForgeEditor({
 
         // Center offsets based on node type dimensions to drop exactly under cursor center
         let centeredPosition = { ...position };
-        if (nodeType === "s3Node" || nodeType === "s3ObjectNode" || nodeType === "ec2Node" || (nodeType === "iamNode" && labelType !== "Group")) {
+        if (nodeType === "s3Node" || nodeType === "s3ObjectNode" || nodeType === "ec2Node" || (nodeType === "iamNode" && labelType !== "Group") || nodeType === "internetGatewayNode") {
           centeredPosition.x -= 110;
           centeredPosition.y -= 35;
         } else if (nodeType === "iamGroupNode" || labelType === "Group") {
           centeredPosition.x -= 150;
           centeredPosition.y -= 100;
+        } else if (nodeType === "vpcNode") {
+          centeredPosition.x -= 300;
+          centeredPosition.y -= 200;
+        } else if (nodeType === "subnetNode") {
+          centeredPosition.x -= 200;
+          centeredPosition.y -= 125;
         } else if (nodeType === "shapeNode") {
           const isContainer = labelType === "Rectangle" || labelType === "Circle";
           if (isContainer) {
@@ -3197,28 +4073,8 @@ export default function CloudForgeEditor({
     }
   };
 
-  const sidebarItems = useMemo(() => [
-    {
-      id: "s3Node",
-      label: "S3 Bucket",
-      category: "aws",
-      icon: <Database size={14} />,
-      iconBgClass: "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20",
-      action: addNewS3Node,
-      dragType: "s3Node",
-      dragLabelType: null,
-    },
-    {
-      id: "s3ObjectNode",
-      label: "S3 Object",
-      category: "aws",
-      icon: <File size={14} />,
-      iconBgClass: "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20",
-      action: addNewS3ObjectNode,
-      dragType: "s3ObjectNode",
-      dragLabelType: null,
-    },
-    {
+  const sidebarItems = useMemo(() => {
+    const commonCompute = {
       id: "ec2Node",
       label: "EC2 Instance",
       category: "compute",
@@ -3227,85 +4083,153 @@ export default function CloudForgeEditor({
       action: addNewEC2Node,
       dragType: "ec2Node",
       dragLabelType: null,
-    },
-    {
-      id: "iamUser",
-      label: "IAM User",
-      category: "iam",
-      icon: <User size={14} />,
-      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
-      action: () => addNewIAMNode("User"),
-      dragType: "iamNode",
-      dragLabelType: "User",
-    },
-    {
-      id: "iamGroup",
-      label: "IAM Group",
-      category: "iam",
-      icon: <Users size={14} />,
-      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
-      action: () => addNewIAMNode("Group"),
-      dragType: "iamGroupNode",
-      dragLabelType: "Group",
-    },
-    {
-      id: "iamRole",
-      label: "IAM Role",
-      category: "iam",
-      icon: <Shield size={14} />,
-      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
-      action: () => addNewIAMNode("Role"),
-      dragType: "iamNode",
-      dragLabelType: "Role",
-    },
-    {
-      id: "iamPolicy",
-      label: "IAM Policy",
-      category: "iam",
-      icon: <Key size={14} />,
-      iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
-      action: () => addNewIAMNode("Policy"),
-      dragType: "iamNode",
-      dragLabelType: "Policy",
-    },
-    {
-      id: "shapeRectangle",
-      label: "Rectangle Group",
-      category: "shapes",
-      icon: <Square size={14} />,
-      iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
-      action: () => addNewShape("Rectangle"),
-      dragType: "shapeNode",
-      dragLabelType: "Rectangle",
-    },
-    {
-      id: "shapeCircle",
-      label: "Circle Group",
-      category: "shapes",
-      icon: <CircleIcon size={14} />,
-      iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
-      action: () => addNewShape("Circle"),
-      dragType: "shapeNode",
-      dragLabelType: "Circle",
-    },
-    {
-      id: "shapeText",
-      label: "Text Label",
-      category: "shapes",
-      icon: <Type size={14} />,
-      iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
-      action: () => addNewShape("Text"),
-      dragType: "shapeNode",
-      dragLabelType: "Text",
-    }
-  ], [addNewS3Node, addNewS3ObjectNode, addNewEC2Node, addNewIAMNode, addNewShape]);
+    };
 
-  const categories = useMemo(() => [
-    { id: "aws", label: "Storage" },
-    { id: "compute", label: "Compute" },
-    { id: "iam", label: "IAM" },
-    { id: "shapes", label: "Shapes & Groups" }
-  ], []);
+    if (activeMode === "audit") {
+      return [
+        {
+          id: "vpcNode",
+          label: "VPC",
+          category: "networking",
+          icon: <Network size={14} />,
+          iconBgClass: "bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-500 border border-indigo-200 dark:border-indigo-500/20",
+          action: addNewVpcNode,
+          dragType: "vpcNode",
+          dragLabelType: null,
+        },
+        {
+          id: "subnetNode",
+          label: "Subnet",
+          category: "networking",
+          icon: <Layers size={14} />,
+          iconBgClass: "bg-teal-100 dark:bg-teal-500/10 text-teal-600 dark:text-teal-500 border border-teal-200 dark:border-teal-500/20",
+          action: addNewSubnetNode,
+          dragType: "subnetNode",
+          dragLabelType: null,
+        },
+        {
+          id: "internetGatewayNode",
+          label: "Internet Gateway",
+          category: "networking",
+          icon: <Globe size={14} />,
+          iconBgClass: "bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-500 border border-indigo-200 dark:border-indigo-500/20",
+          action: addNewInternetGatewayNode,
+          dragType: "internetGatewayNode",
+          dragLabelType: null,
+        },
+        commonCompute
+      ];
+    }
+
+    return [
+      {
+        id: "s3Node",
+        label: "S3 Bucket",
+        category: "aws",
+        icon: <Database size={14} />,
+        iconBgClass: "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20",
+        action: addNewS3Node,
+        dragType: "s3Node",
+        dragLabelType: null,
+      },
+      {
+        id: "s3ObjectNode",
+        label: "S3 Object",
+        category: "aws",
+        icon: <File size={14} />,
+        iconBgClass: "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-500/20",
+        action: addNewS3ObjectNode,
+        dragType: "s3ObjectNode",
+        dragLabelType: null,
+      },
+      commonCompute,
+      {
+        id: "iamUser",
+        label: "IAM User",
+        category: "iam",
+        icon: <User size={14} />,
+        iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
+        action: () => addNewIAMNode("User"),
+        dragType: "iamNode",
+        dragLabelType: "User",
+      },
+      {
+        id: "iamGroup",
+        label: "IAM Group",
+        category: "iam",
+        icon: <Users size={14} />,
+        iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
+        action: () => addNewIAMNode("Group"),
+        dragType: "iamGroupNode",
+        dragLabelType: "Group",
+      },
+      {
+        id: "iamRole",
+        label: "IAM Role",
+        category: "iam",
+        icon: <Shield size={14} />,
+        iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
+        action: () => addNewIAMNode("Role"),
+        dragType: "iamNode",
+        dragLabelType: "Role",
+      },
+      {
+        id: "iamPolicy",
+        label: "IAM Policy",
+        category: "iam",
+        icon: <Key size={14} />,
+        iconBgClass: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-500 border border-violet-200 dark:border-violet-500/20",
+        action: () => addNewIAMNode("Policy"),
+        dragType: "iamNode",
+        dragLabelType: "Policy",
+      },
+      {
+        id: "shapeRectangle",
+        label: "Rectangle Group",
+        category: "shapes",
+        icon: <Square size={14} />,
+        iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
+        action: () => addNewShape("Rectangle"),
+        dragType: "shapeNode",
+        dragLabelType: "Rectangle",
+      },
+      {
+        id: "shapeCircle",
+        label: "Circle Group",
+        category: "shapes",
+        icon: <CircleIcon size={14} />,
+        iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
+        action: () => addNewShape("Circle"),
+        dragType: "shapeNode",
+        dragLabelType: "Circle",
+      },
+      {
+        id: "shapeText",
+        label: "Text Label",
+        category: "shapes",
+        icon: <Type size={14} />,
+        iconBgClass: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-200 dark:border-blue-500/20",
+        action: () => addNewShape("Text"),
+        dragType: "shapeNode",
+        dragLabelType: "Text",
+      }
+    ];
+  }, [activeMode, addNewS3Node, addNewS3ObjectNode, addNewEC2Node, addNewIAMNode, addNewShape, addNewVpcNode, addNewSubnetNode, addNewInternetGatewayNode]);
+
+  const categories = useMemo(() => {
+    if (activeMode === "audit") {
+      return [
+        { id: "networking", label: "Networking" },
+        { id: "compute", label: "Compute" }
+      ];
+    }
+    return [
+      { id: "aws", label: "Storage" },
+      { id: "compute", label: "Compute" },
+      { id: "iam", label: "IAM" },
+      { id: "shapes", label: "Shapes & Groups" }
+    ];
+  }, [activeMode]);
 
   const filteredCategories = useMemo(() => {
     const query = nodePaletteSearch.toLowerCase().trim();
@@ -3688,6 +4612,21 @@ export default function CloudForgeEditor({
                             size={16}
                             className="text-sky-500 shrink-0"
                           />
+                        ) : res.type === "vpcNode" ? (
+                          <Network
+                            size={16}
+                            className="text-indigo-500 shrink-0"
+                          />
+                        ) : res.type === "subnetNode" ? (
+                          <Layers
+                            size={16}
+                            className="text-teal-500 shrink-0"
+                          />
+                        ) : res.type === "internetGatewayNode" ? (
+                          <Globe
+                            size={16}
+                            className="text-indigo-500 shrink-0"
+                          />
                         ) : (
                           <Square size={16} className="text-blue-500 shrink-0" />
                         )}
@@ -3704,7 +4643,13 @@ export default function CloudForgeEditor({
                                   ? `AWS IAM ${res.data?.iamType || "Resource"}`
                                   : res.type === "ec2Node"
                                     ? "AWS EC2"
-                                    : "Shape / Group"}
+                                    : res.type === "vpcNode"
+                                      ? "AWS VPC"
+                                      : res.type === "subnetNode"
+                                        ? "AWS Subnet"
+                                        : res.type === "internetGatewayNode"
+                                          ? "AWS Internet Gateway"
+                                          : "Shape / Group"}
                           </span>
                         </div>
                       </button>
@@ -3722,14 +4667,11 @@ export default function CloudForgeEditor({
           {/* Right Island (Actions) */}
           <div className="flex items-center gap-3 pointer-events-auto">
             <button
-              onClick={() => {
-                fetchDeploymentsList();
-                setIsDeploymentsModalOpen(true);
-              }}
+              onClick={() => setIsSettingsOpen(true)}
               className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
-              title="Deployment History"
+              title="Settings"
             >
-              <History size={18} />
+              <Settings size={18} />
             </button>
             <button
               onClick={() => setIsDocsOpen(true)}
@@ -3739,10 +4681,14 @@ export default function CloudForgeEditor({
               <BookOpen size={18} />
             </button>
             <button
-              onClick={() => setIsSettingsOpen(true)}
+              onClick={() => {
+                fetchDeploymentsList();
+                setIsDeploymentsModalOpen(true);
+              }}
               className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
+              title="Deployment History"
             >
-              <Settings size={18} />
+              <History size={18} />
             </button>
             <div className="h-6 w-px bg-slate-300 dark:bg-zinc-800 mx-1" />
             <button
@@ -3870,7 +4816,9 @@ export default function CloudForgeEditor({
                         ? "text-violet-500"
                         : selectedNode.type === "ec2Node"
                           ? "text-sky-500"
-                          : "text-blue-500"
+                          : selectedNode.type === "vpcNode" || selectedNode.type === "subnetNode" || selectedNode.type === "internetGatewayNode"
+                            ? "text-indigo-500"
+                            : "text-blue-500"
                   }
                 />
                 <h2 className="font-bold text-xs text-slate-800 dark:text-zinc-200 uppercase tracking-wider">
@@ -3880,7 +4828,13 @@ export default function CloudForgeEditor({
                       ? `${selectedNode.data?.iamType || "IAM"} Settings`
                       : selectedNode.type === "ec2Node"
                         ? "EC2 Instance Settings"
-                        : "Group Settings"}
+                        : selectedNode.type === "vpcNode"
+                          ? "VPC Settings"
+                          : selectedNode.type === "subnetNode"
+                            ? "Subnet Settings"
+                            : selectedNode.type === "internetGatewayNode"
+                              ? "Internet Gateway Settings"
+                              : "Group Settings"}
                 </h2>
               </div>
 
@@ -4425,6 +5379,110 @@ export default function CloudForgeEditor({
                 </>
               )}
 
+              {(selectedNode.type === "vpcNode" || selectedNode.type === "subnetNode") && (
+                <>
+                  <div className="flex flex-col gap-1.5 mb-4">
+                    <label className="text-[11px] font-bold font-mono text-slate-400 dark:text-zinc-500 uppercase">
+                      CIDR Block
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedNode.data?.cidrBlock || ""}
+                      onChange={(e) => updateNodeData("cidrBlock", e.target.value)}
+                      className="w-full h-10 px-3 bg-slate-50 dark:bg-zinc-900 text-sm font-medium text-slate-800 dark:text-zinc-100 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 font-mono transition-colors shadow-inner"
+                    />
+                  </div>
+                </>
+              )}
+
+              {selectedNode.type === "subnetNode" && (
+                <>
+                  <div className="space-y-3.5 p-4 bg-slate-50 dark:bg-zinc-900/50 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-sm dark:shadow-none mb-4">
+                    <h4 className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                      Subnet Components
+                    </h4>
+
+                    {/* NAT Gateway Button */}
+                    <div className="flex flex-col gap-1.5 font-sans">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                          NAT Gateway (NG)
+                        </span>
+                        {selectedNode.data?.hasNatGateway ? (
+                          <span className="px-2 py-0.5 text-[9px] font-extrabold text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 rounded-full border border-emerald-100 dark:border-emerald-500/20">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-[9px] font-extrabold text-slate-505 bg-slate-100 dark:bg-zinc-800 rounded-full border border-slate-200 dark:border-zinc-800">
+                            Disabled
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSubnetModal("nat")}
+                        className="w-full h-9 flex items-center justify-center gap-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/20 border border-teal-200 dark:border-teal-900/35 rounded-xl transition-all"
+                      >
+                        <Network size={13} />
+                        Configure NAT Gateway
+                      </button>
+                    </div>
+
+                    {/* Route Table Button */}
+                    <div className="flex flex-col gap-1.5 font-sans">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                          Route Table (RT)
+                        </span>
+                        {selectedNode.data?.routeTableConfig?.isCustom ? (
+                          <span className="px-2 py-0.5 text-[9px] font-extrabold text-purple-600 dark:text-purple-500 bg-purple-50 dark:bg-purple-500/10 rounded-full border border-purple-100 dark:border-purple-500/20">
+                            Custom
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-[9px] font-extrabold text-blue-600 dark:text-blue-500 bg-blue-50 dark:bg-blue-500/10 rounded-full border border-blue-100 dark:border-blue-500/20">
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSubnetModal("rt")}
+                        className="w-full h-9 flex items-center justify-center gap-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/20 border border-teal-200 dark:border-teal-900/35 rounded-xl transition-all"
+                      >
+                        <Compass size={13} />
+                        Configure Route Table
+                      </button>
+                    </div>
+
+                    {/* Network ACL Button */}
+                    <div className="flex flex-col gap-1.5 font-sans">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                          Network ACL (ACL)
+                        </span>
+                        {selectedNode.data?.naclConfig?.isCustom ? (
+                          <span className="px-2 py-0.5 text-[9px] font-extrabold text-purple-600 dark:text-purple-500 bg-purple-50 dark:bg-purple-500/10 rounded-full border border-purple-100 dark:border-purple-500/20">
+                            Custom
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-[9px] font-extrabold text-blue-600 dark:text-blue-500 bg-blue-50 dark:bg-blue-500/10 rounded-full border border-blue-100 dark:border-blue-500/20">
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSubnetModal("nacl")}
+                        className="w-full h-9 flex items-center justify-center gap-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/20 border border-teal-200 dark:border-teal-900/35 rounded-xl transition-all"
+                      >
+                        <ShieldAlert size={13} />
+                        Configure Network ACL
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
               {selectedNode.type === "iamGroupNode" && (
                 <>
                   <div className="flex flex-col gap-1.5">
@@ -4490,7 +5548,7 @@ export default function CloudForgeEditor({
                   onClick={() => {
                     const node = nodes.find((n) => n.id === selectedNodeId);
                     if (node) {
-                      const isGroup = node.type === "iamGroupNode" || node.type === "s3Node";
+                      const isGroup = node.type === "iamGroupNode" || node.type === "s3Node" || node.type === "vpcNode" || node.type === "subnetNode";
                       const children = isGroup ? nodes.filter((n) => n.parentId === node.id) : [];
 
                       if (isGroup && children.length > 0) {
@@ -5915,7 +6973,7 @@ export default function CloudForgeEditor({
                                   targetEdges = parsed.edges;
                                 }
                                 
-                                setNodes(targetNodes);
+                                setNodes(layoutAllVpcs(targetNodes));
                                 setEdges(targetEdges);
                                 addLog(`🔄 Loaded deployment version ${selectedDeployment.id} onto the canvas.`, "success");
                                 setIsDeploymentsModalOpen(false);
@@ -6623,6 +7681,44 @@ export default function CloudForgeEditor({
               </div>
             </div>
           </div>
+        )}
+
+        {/* SUBNET MODALS */}
+        {activeSubnetModal === "nat" && selectedNode && (
+          <SubnetNatModal
+            node={selectedNode}
+            onClose={() => setActiveSubnetModal(null)}
+            onUpdateNodeData={(key, val) => {
+              takeSnapshot();
+              setNodes((nds) =>
+                nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, [key]: val } } : n))
+              );
+            }}
+          />
+        )}
+        {activeSubnetModal === "rt" && selectedNode && (
+          <SubnetRtModal
+            node={selectedNode}
+            onClose={() => setActiveSubnetModal(null)}
+            onUpdateNodeData={(key, val) => {
+              takeSnapshot();
+              setNodes((nds) =>
+                nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, [key]: val } } : n))
+              );
+            }}
+          />
+        )}
+        {activeSubnetModal === "nacl" && selectedNode && (
+          <SubnetNaclModal
+            node={selectedNode}
+            onClose={() => setActiveSubnetModal(null)}
+            onUpdateNodeData={(key, val) => {
+              takeSnapshot();
+              setNodes((nds) =>
+                nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, [key]: val } } : n))
+              );
+            }}
+          />
         )}
 
         {/* TOAST NOTIFICATION */}
