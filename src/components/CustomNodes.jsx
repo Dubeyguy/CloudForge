@@ -845,7 +845,7 @@ export const VPCNode = ({ id, data, selected }) => {
         minHeight={250}
       />
       <div
-        className="w-full h-full relative border-4 border-dashed border-indigo-400/60 dark:border-indigo-500/40 bg-indigo-500/5 transition-colors hover:border-indigo-500 cursor-grab active:cursor-grabbing group rounded-3xl"
+        className="w-full h-full relative border-4 border-dashed border-indigo-400/60 dark:border-indigo-500/40 bg-transparent transition-colors hover:border-indigo-500 cursor-grab active:cursor-grabbing group rounded-3xl"
       >
         <ZoomedOutOverlay type="VPC" name={data?.label} colorClass="bg-indigo-500" borderClass="border-indigo-500" />
         <Handle
@@ -912,7 +912,7 @@ export const SubnetNode = ({ id, data, selected }) => {
         minHeight={180}
       />
       <div
-        className="w-full h-full relative border-4 border-dashed border-teal-400/60 dark:border-teal-500/40 bg-teal-500/5 transition-colors hover:border-teal-500 cursor-grab active:cursor-grabbing group rounded-3xl"
+        className="w-full h-full relative border-4 border-dashed border-teal-400/60 dark:border-teal-500/40 bg-transparent transition-colors hover:border-teal-500 cursor-grab active:cursor-grabbing group rounded-3xl"
       >
         <ZoomedOutOverlay type="Subnet" name={data?.label} colorClass="bg-teal-500" borderClass="border-teal-500" />
         <Handle
@@ -991,7 +991,7 @@ export const InternetGatewayNode = ({ data, id }) => {
     <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-4 shadow-lg dark:shadow-xl w-[280px] transition-all cursor-grab active:cursor-grabbing group relative hover:border-indigo-400 dark:hover:border-indigo-500/50">
       <ZoomedOutOverlay type="Internet Gateway" name={data?.label} colorClass="bg-indigo-500" borderClass="border-indigo-500" isCard={true} />
       <Handle
-        type="target"
+        type="source"
         position={Position.Top}
         id="top"
         className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
@@ -1000,8 +1000,24 @@ export const InternetGatewayNode = ({ data, id }) => {
       </Handle>
       <Handle
         type="source"
+        position={Position.Right}
+        id="right"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
+      <Handle
+        type="source"
         position={Position.Bottom}
         id="bottom"
+        className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
+      >
+        <div className="w-3 h-3 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 shadow-md" />
+      </Handle>
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="left"
         className="opacity-0 group-hover:opacity-100 transition-opacity !w-10 !h-10 !bg-transparent !border-0 flex items-center justify-center"
       >
         <div className="w-3 h-3 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 shadow-md" />

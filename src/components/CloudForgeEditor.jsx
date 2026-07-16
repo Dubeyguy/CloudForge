@@ -1444,8 +1444,8 @@ const getGroupLayoutConfig = (parentType, childCount) => {
     const minHeight = 100 + Math.ceil(childCount / 2) * 325;
     const minWidth = childCount > 1 ? 1035 : 530;
     return {
-      minHeight: Math.max(500, minHeight),
-      minWidth: Math.max(650, minWidth),
+      minHeight: childCount === 0 ? 200 : Math.max(200, minHeight),
+      minWidth: Math.max(530, minWidth),
       getChildPosition: (index) => {
         const row = Math.floor(index / 2);
         const col = index % 2;
@@ -1514,7 +1514,7 @@ const layoutSubnetsInVpc = (vpcId, nds) => {
   const col1Height = layoutColumn(col1, 530); // 480px width + 25px spacing + 25px margin = 530px
 
   const maxColHeight = Math.max(col0Height, col1Height);
-  const vpcHeight = Math.max(500, maxColHeight + 25); // 25px bottom padding
+  const vpcHeight = subnets.length === 0 ? 200 : Math.max(200, maxColHeight + 25); // 25px bottom padding
   const vpcWidth = subnets.length > 1 ? 1035 : 530;
 
   const subnetIds = subnets.map((s) => s.id);
@@ -1564,6 +1564,73 @@ const layoutAllVpcs = (nds) => {
   });
   return updated;
 };
+
+const updateParentLayoutAndVpcs = (parentId, nds) => {
+  if (!parentId) return layoutAllVpcs(nds);
+
+  const parentNode = nds.find((n) => n.id === parentId);
+  if (!parentNode) return layoutAllVpcs(nds);
+
+  const remainingChildren = nds.filter((n) => n.parentId === parentId);
+  const isGridGroup = parentNode.type === "iamGroupNode" || parentNode.type === "s3Node" || parentNode.type === "subnetNode";
+
+  let updatedNodes = nds;
+  if (isGridGroup) {
+    const cfg = getGroupLayoutConfig(parentNode.type, remainingChildren.length);
+    updatedNodes = nds.map((n) => {
+      if (n.id === parentId) {
+        return {
+          ...n,
+          style: {
+            ...n.style,
+            height: cfg.minHeight,
+            width: cfg.minWidth,
+          }
+        };
+      }
+      if (n.parentId === parentId) {
+        const childIndex = remainingChildren.findIndex(child => child.id === n.id);
+        return {
+          ...n,
+          position: cfg.getChildPosition(childIndex)
+        };
+      }
+      return n;
+    });
+  }
+
+  return layoutAllVpcs(updatedNodes);
+};
+
+const getNodeAbsolutePosition = (node, nds) => {
+  let x = node.position.x;
+  let y = node.position.y;
+  let curr = node;
+  while (curr.parentId) {
+    const parent = nds.find((p) => p.id === curr.parentId);
+    if (!parent) break;
+    x += parent.position.x;
+    y += parent.position.y;
+    curr = parent;
+  }
+  return { x, y };
+};
+
+const CONNECTION_RESOURCE_OPTIONS = [
+  { value: "vpc", label: "VPC", icon: Network, nodeType: "vpcNode", labelType: null },
+  { value: "subnet", label: "Subnet", icon: Layers, nodeType: "subnetNode", labelType: null },
+  { value: "igw", label: "Internet Gateway", icon: Globe, nodeType: "internetGatewayNode", labelType: null },
+  { value: "ec2", label: "EC2 Instance", icon: Server, nodeType: "ec2Node", labelType: null },
+  { value: "s3", label: "S3 Bucket", icon: Database, nodeType: "s3Node", labelType: null },
+  { value: "s3object", label: "S3 Object", icon: File, nodeType: "s3ObjectNode", labelType: null },
+  { value: "user", label: "IAM User", icon: User, nodeType: "iamNode", labelType: "User" },
+  { value: "group", label: "IAM Group", icon: Users, nodeType: "iamGroupNode", labelType: "Group" },
+  { value: "role", label: "IAM Role", icon: Shield, nodeType: "iamNode", labelType: "Role" },
+  { value: "policy", label: "IAM Policy", icon: Key, nodeType: "iamNode", labelType: "Policy" },
+  { value: "rect", label: "Rectangle Group", icon: Square, nodeType: "shapeNode", labelType: "Rectangle" },
+  { value: "circle", label: "Circle Group", icon: CircleIcon, nodeType: "shapeNode", labelType: "Circle" },
+  { value: "text", label: "Text Label", icon: Type, nodeType: "shapeNode", labelType: "Text" },
+];
 // ==========================================
 // 3. MAIN APP: The Floating Editor
 // ==========================================
@@ -2187,7 +2254,7 @@ export default function CloudForgeEditor({
         const groupRemoveChanges = removeChanges.filter((c) => {
           const node = nodes.find((n) => n.id === c.id);
           if (node) {
-            const isGroup = node.type === "iamGroupNode" || node.type === "s3Node";
+            const isGroup = node.type === "iamGroupNode" || node.type === "s3Node" || node.type === "vpcNode" || node.type === "subnetNode";
             if (isGroup) {
               const children = nodes.filter((n) => n.parentId === node.id);
               if (children.length > 0) return true;
@@ -2213,7 +2280,7 @@ export default function CloudForgeEditor({
               // Delete parent group and all its nested children
               setNodes((nds) => {
                 let updated = nds.filter((n) => n.id !== node.id && n.parentId !== node.id);
-                return updated;
+                return layoutAllVpcs(updated);
               });
               setEdges((eds) =>
                 eds.filter(
@@ -2256,8 +2323,7 @@ export default function CloudForgeEditor({
               const remainingChildren = nextNodes.filter((n) => n.parentId === parentId);
               const newChildrenCount = remainingChildren.length;
 
-              const newHeight = Math.max(200, 100 + Math.ceil(newChildrenCount / 2) * 80);
-              const newWidth = newChildrenCount > 1 ? 500 : 300;
+              const cfg = getGroupLayoutConfig(parentGroupNode.type, newChildrenCount);
 
               nextNodes = nextNodes.map((n) => {
                 if (n.id === parentId) {
@@ -2265,18 +2331,16 @@ export default function CloudForgeEditor({
                     ...n,
                     style: {
                       ...n.style,
-                      height: newHeight,
-                      width: newWidth,
+                      height: cfg.minHeight,
+                      width: cfg.minWidth,
                     },
                   };
                 }
                 if (n.parentId === parentId) {
                   const childIndex = remainingChildren.findIndex((child) => child.id === n.id);
-                  const row = Math.floor(childIndex / 2);
-                  const col = childIndex % 2;
                   return {
                     ...n,
-                    position: { x: 20 + col * 240, y: 60 + row * 80 },
+                    position: cfg.getChildPosition(childIndex),
                   };
                 }
                 return n;
@@ -2284,7 +2348,7 @@ export default function CloudForgeEditor({
             }
           });
 
-          return nextNodes;
+          return layoutAllVpcs(nextNodes);
         });
       } else {
         standardOnNodesChange(changes);
@@ -2377,7 +2441,16 @@ export default function CloudForgeEditor({
 
     // Center offset adjustments based on node size
     let centeredPosition = { x: flowX, y: flowY };
-    if (nodeType === "s3ObjectNode" || nodeType === "ec2Node" || (nodeType === "iamNode" && labelType !== "Group")) {
+    if (nodeType === "vpcNode") {
+      centeredPosition.x -= 265;
+      centeredPosition.y -= 100;
+    } else if (nodeType === "subnetNode") {
+      centeredPosition.x -= 240;
+      centeredPosition.y -= 150;
+    } else if (nodeType === "internetGatewayNode") {
+      centeredPosition.x -= 140;
+      centeredPosition.y -= 40;
+    } else if (nodeType === "s3ObjectNode" || nodeType === "ec2Node" || (nodeType === "iamNode" && labelType !== "Group")) {
       centeredPosition.x -= 110;
       centeredPosition.y -= 35;
     } else if (nodeType === "iamGroupNode" || nodeType === "s3Node" || labelType === "Group") {
@@ -2415,6 +2488,52 @@ export default function CloudForgeEditor({
         style: { width: 300, height: 200 },
       };
       addLog(`➕ Added S3 Bucket and Connected.`, "success");
+    } else if (nodeType === "vpcNode") {
+      newNodeId = `vpc_${Date.now()}`;
+      newNode = {
+        id: newNodeId,
+        type: "vpcNode",
+        data: {
+          label: `vpc-${Math.floor(Math.random() * 1000)}`,
+          region: userSettings.defaultRegion,
+          cidrBlock: "10.0.0.0/16",
+        },
+        position: centeredPosition,
+        zIndex: -1,
+        style: { width: 530, height: 200 },
+      };
+      addLog(`➕ Added VPC and Connected.`, "success");
+    } else if (nodeType === "subnetNode") {
+      newNodeId = `subnet_${Date.now()}`;
+      newNode = {
+        id: newNodeId,
+        type: "subnetNode",
+        data: {
+          label: `subnet-${Math.floor(Math.random() * 1000)}`,
+          region: userSettings.defaultRegion,
+          cidrBlock: "10.0.1.0/24",
+          hasNatGateway: false,
+          hasRouteTable: true,
+          hasNetworkAcl: true,
+        },
+        position: centeredPosition,
+        zIndex: -1,
+        style: { width: 480, height: 300 },
+      };
+      addLog(`➕ Added Subnet and Connected.`, "success");
+    } else if (nodeType === "internetGatewayNode") {
+      newNodeId = `igw_${Date.now()}`;
+      newNode = {
+        id: newNodeId,
+        type: "internetGatewayNode",
+        data: {
+          label: `igw-${Math.floor(Math.random() * 1000)}`,
+          region: userSettings.defaultRegion,
+        },
+        position: centeredPosition,
+        zIndex: 0,
+      };
+      addLog(`➕ Added Internet Gateway and Connected.`, "success");
     } else if (nodeType === "s3ObjectNode") {
       newNodeId = `s3_obj_${Date.now()}`;
       newNode = {
@@ -2497,12 +2616,25 @@ export default function CloudForgeEditor({
       let targetHandleOnNew = "top";
       const fromNode = nodes.find((n) => n.id === fromNodeId);
       if (fromNode) {
-        const fromCenterX = fromNode.position.x + (fromNode.style?.width ? fromNode.style.width / 2 : 110);
-        const fromCenterY = fromNode.position.y + (fromNode.style?.height ? fromNode.style.height / 2 : 40);
+        const fromAbsPos = getNodeAbsolutePosition(fromNode, nodes);
+        const fromWidth = fromNode.style?.width || (fromNode.type === "vpcNode" ? 530 : fromNode.type === "subnetNode" ? 480 : fromNode.type === "s3Node" || fromNode.type === "iamGroupNode" ? 300 : 220);
+        const fromHeight = fromNode.style?.height || (fromNode.type === "vpcNode" ? 200 : fromNode.type === "subnetNode" ? 300 : fromNode.type === "s3Node" || fromNode.type === "iamGroupNode" ? 200 : 70);
+
+        const fromCenterX = fromAbsPos.x + fromWidth / 2;
+        const fromCenterY = fromAbsPos.y + fromHeight / 2;
         
         let newWidth = 220;
         let newHeight = 80;
-        if (nodeType === "s3Node" || nodeType === "iamGroupNode" || (nodeType === "iamNode" && labelType === "Group")) {
+        if (nodeType === "vpcNode") {
+          newWidth = 530;
+          newHeight = 200;
+        } else if (nodeType === "subnetNode") {
+          newWidth = 480;
+          newHeight = 300;
+        } else if (nodeType === "internetGatewayNode") {
+          newWidth = 280;
+          newHeight = 80;
+        } else if (nodeType === "s3Node" || nodeType === "iamGroupNode" || (nodeType === "iamNode" && labelType === "Group")) {
           newWidth = 300;
           newHeight = 200;
         } else if (nodeType === "shapeNode") {
@@ -2593,41 +2725,7 @@ export default function CloudForgeEditor({
     const parentId = nodeToDelete.parentId;
     const nextNodesFiltered = nds.filter((n) => n.id !== nodeId);
 
-    if (parentId) {
-      const parentNode = nds.find((n) => n.id === parentId);
-      const remainingChildren = nextNodesFiltered.filter((n) => n.parentId === parentId);
-      
-      const isGridGroup = parentNode.type === "iamGroupNode" || parentNode.type === "s3Node" || parentNode.type === "subnetNode";
-
-      let updatedNodes = nextNodesFiltered;
-      if (isGridGroup) {
-        const cfg = getGroupLayoutConfig(parentNode.type, remainingChildren.length);
-        updatedNodes = nextNodesFiltered.map((n) => {
-          if (n.id === parentId) {
-            return {
-              ...n,
-              style: {
-                ...n.style,
-                height: cfg.minHeight,
-                width: cfg.minWidth,
-              }
-            };
-          }
-          if (n.parentId === parentId) {
-            const childIndex = remainingChildren.findIndex(child => child.id === n.id);
-            return {
-              ...n,
-              position: cfg.getChildPosition(childIndex)
-            };
-          }
-          return n;
-        });
-      }
-
-      return layoutAllVpcs(updatedNodes);
-    }
-
-    return nextNodesFiltered;
+    return updateParentLayoutAndVpcs(parentId, nextNodesFiltered);
   }, []);
 
   const onNodeDragStop = useCallback(
@@ -2647,19 +2745,7 @@ export default function CloudForgeEditor({
           if (validNewParent && validNewParent.id === node.parentId) {
             // Moved within same parent -> re-snap to correct grid slot
             setNodes((nds) => {
-              const children = nds.filter((n) => n.parentId === node.parentId);
-              const cfg = getGroupLayoutConfig(parentGroupNode.type, children.length);
-              const updated = nds.map((n) => {
-                if (n.parentId === node.parentId) {
-                  const childIndex = children.findIndex(child => child.id === n.id);
-                  return {
-                    ...n,
-                    position: cfg.getChildPosition(childIndex)
-                  };
-                }
-                return n;
-              });
-              return layoutAllVpcs(updated);
+              return updateParentLayoutAndVpcs(node.parentId, nds);
             });
             addLog(`Position updated within group`, "info");
             return;
@@ -2667,21 +2753,15 @@ export default function CloudForgeEditor({
             // Dragged OUTSIDE current parent -> either transition to new parent or detach to canvas
             setNodes((nds) => {
               const oldParentId = node.parentId;
-              const oldParentNode = nds.find((n) => n.id === oldParentId);
-              const oldRemainingChildren = nds.filter((n) => n.parentId === oldParentId && n.id !== node.id);
-
               const newParentId = validNewParent?.id || null;
-              const newChildren = newParentId ? nds.filter((n) => n.parentId === newParentId) : [];
 
-              const updatedNodes = nds.map((n) => {
+              let updatedNodes = nds.map((n) => {
                 // Dragged node
                 if (n.id === node.id) {
                   if (newParentId) {
-                    const cfg = getGroupLayoutConfig(validNewParent.type, newChildren.length + 1);
                     return {
                       ...n,
                       parentId: newParentId,
-                      position: cfg.getChildPosition(newChildren.length),
                       ...(validNewParent.type === "vpcNode" ? { extent: "parent" } : { extent: undefined }),
                     };
                   } else {
@@ -2689,65 +2769,25 @@ export default function CloudForgeEditor({
                     return {
                       ...rest,
                       position: internalNode?.positionAbsolute || {
-                        x: oldParentNode.position.x + node.position.x,
-                        y: oldParentNode.position.y + node.position.y,
+                        x: nds.find((p) => p.id === oldParentId).position.x + node.position.x,
+                        y: nds.find((p) => p.id === oldParentId).position.y + node.position.y,
                       },
                     };
                   }
                 }
-
-                // Old parent container resize
-                if (n.id === oldParentId) {
-                  const cfg = getGroupLayoutConfig(oldParentNode.type, oldRemainingChildren.length);
-                  return {
-                    ...n,
-                    style: {
-                      ...n.style,
-                      height: cfg.minHeight,
-                      width: cfg.minWidth,
-                    }
-                  };
-                }
-
-                // Old parent remaining children reflow
-                if (n.parentId === oldParentId) {
-                  const idx = oldRemainingChildren.findIndex((child) => child.id === n.id);
-                  const cfg = getGroupLayoutConfig(oldParentNode.type, oldRemainingChildren.length);
-                  return {
-                    ...n,
-                    position: cfg.getChildPosition(idx),
-                  };
-                }
-
-                // New parent container resize
-                if (newParentId && n.id === newParentId) {
-                  const cfg = getGroupLayoutConfig(validNewParent.type, newChildren.length + 1);
-                  return {
-                    ...n,
-                    style: {
-                      ...n.style,
-                      height: cfg.minHeight,
-                      width: cfg.minWidth,
-                    }
-                  };
-                }
-
-                // New parent existing children reflow
-                if (newParentId && n.parentId === newParentId) {
-                  const idx = newChildren.findIndex((child) => child.id === n.id);
-                  const cfg = getGroupLayoutConfig(validNewParent.type, newChildren.length + 1);
-                  return {
-                    ...n,
-                    position: cfg.getChildPosition(idx),
-                  };
-                }
-
                 return n;
               });
 
+              if (oldParentId) {
+                updatedNodes = updateParentLayoutAndVpcs(oldParentId, updatedNodes);
+              }
+              if (newParentId) {
+                updatedNodes = updateParentLayoutAndVpcs(newParentId, updatedNodes);
+              }
+
               const targetNode = updatedNodes.find((n) => n.id === node.id);
               const withoutTarget = updatedNodes.filter((n) => n.id !== node.id);
-              return layoutAllVpcs([...withoutTarget, targetNode]);
+              return [...withoutTarget, targetNode];
             });
 
             if (newParentId) {
@@ -2773,44 +2813,21 @@ export default function CloudForgeEditor({
       if (!node.parentId && validNewParent) {
         const newParentId = validNewParent.id;
         setNodes((nds) => {
-          const newChildren = nds.filter((n) => n.parentId === newParentId);
-          const cfg = getGroupLayoutConfig(validNewParent.type, newChildren.length + 1);
-
           const updatedNodes = nds.map((n) => {
-            if (n.id === newParentId) {
-              return {
-                ...n,
-                style: {
-                  ...n.style,
-                  height: cfg.minHeight,
-                  width: cfg.minWidth,
-                },
-              };
-            }
-
-            if (n.parentId === newParentId) {
-              const idx = newChildren.findIndex((child) => child.id === n.id);
-              return {
-                ...n,
-                position: cfg.getChildPosition(idx),
-              };
-            }
-
             if (n.id === node.id) {
               return {
                 ...n,
                 parentId: newParentId,
-                position: cfg.getChildPosition(newChildren.length),
-                ...(validNewParent.type === "vpcNode" ? { extent: "parent" } : { extent: undefined }),
+                extent: "parent",
               };
             }
-
             return n;
           });
 
-          const targetNode = updatedNodes.find((n) => n.id === node.id);
-          const withoutTarget = updatedNodes.filter((n) => n.id !== node.id);
-          return layoutAllVpcs([...withoutTarget, targetNode]);
+          const res = updateParentLayoutAndVpcs(newParentId, updatedNodes);
+          const targetNode = res.find((n) => n.id === node.id);
+          const withoutTarget = res.filter((n) => n.id !== node.id);
+          return [...withoutTarget, targetNode];
         });
 
         setEdges((eds) =>
@@ -2823,7 +2840,7 @@ export default function CloudForgeEditor({
           )
         );
 
-        addLog(`Component nested inside parent group`, "success");
+        addLog(`Component dropped into parent group`, "success");
         return;
       }
     },
@@ -2937,7 +2954,7 @@ export default function CloudForgeEditor({
     if (contextMenu.type === "node") {
       const node = nodes.find((n) => n.id === contextMenu.id);
       if (node) {
-        const isGroup = node.type === "iamGroupNode" || node.type === "s3Node";
+        const isGroup = node.type === "iamGroupNode" || node.type === "s3Node" || node.type === "vpcNode" || node.type === "subnetNode";
         const children = isGroup ? nodes.filter((n) => n.parentId === node.id) : [];
 
         if (isGroup && children.length > 0) {
@@ -2952,7 +2969,7 @@ export default function CloudForgeEditor({
               takeSnapshot();
               setNodes((nds) => {
                 let updated = nds.filter((n) => n.id !== node.id && n.parentId !== node.id);
-                return updated;
+                return layoutAllVpcs(updated);
               });
               setEdges((eds) =>
                 eds.filter(
@@ -3005,15 +3022,17 @@ export default function CloudForgeEditor({
       y: contextMenu.y,
     });
     const newId = `${clipboard.type.replace("Node", "")}_${Date.now()}`;
-    setNodes((nds) =>
-      nds.concat({
+    setNodes((nds) => {
+      const newNodeObj = {
         ...clipboard,
         id: newId,
         position,
         selected: false,
         data: { ...clipboard.data, label: `${clipboard.data.label}-copy` },
-      }),
-    );
+      };
+      const nextNodes = nds.concat(newNodeObj);
+      return updateParentLayoutAndVpcs(clipboard.parentId, nextNodes);
+    });
     addLog(`📋 Pasted component.`, "success");
     setContextMenu(null);
   };
@@ -3223,7 +3242,7 @@ export default function CloudForgeEditor({
         },
         position: resolvedPosition,
         zIndex: -1,
-        style: { width: 650, height: 500 },
+        style: { width: 530, height: 200 },
       };
       addLog(`➕ Added VPC.`, "info");
     } else if (nodeType === "subnetNode") {
@@ -3250,10 +3269,6 @@ export default function CloudForgeEditor({
       if (parentGroupId) {
         const subnetId = `subnet_${Date.now()}`;
         setNodes((nds) => {
-          const currentChildren = nds.filter((n) => n.parentId === parentGroupId);
-          const newChildrenCount = currentChildren.length + 1;
-          const cfg = getGroupLayoutConfig("vpcNode", newChildrenCount);
-
           const subnetNode = {
             id: subnetId,
             type: "subnetNode",
@@ -3266,35 +3281,13 @@ export default function CloudForgeEditor({
               hasNetworkAcl: true,
             },
             parentId: parentGroupId,
-            position: cfg.getChildPosition(currentChildren.length),
+            position: { x: 0, y: 0 },
             zIndex: -1,
             style: { width: 480, height: 300 },
             extent: "parent",
           };
-
-          const updatedNodes = nds.map((n) => {
-            if (n.id === parentGroupId) {
-              return {
-                ...n,
-                style: {
-                  ...n.style,
-                  height: cfg.minHeight,
-                  width: cfg.minWidth,
-                },
-              };
-            }
-            if (n.parentId === parentGroupId) {
-              const idx = currentChildren.findIndex(child => child.id === n.id);
-              return {
-                ...n,
-                position: cfg.getChildPosition(idx),
-              };
-            }
-            return n;
-          });
-
-          const withoutSubnet = updatedNodes.filter((n) => n.id !== subnetNode.id);
-          return [...withoutSubnet, subnetNode];
+          const nextNodes = nds.concat(subnetNode);
+          return updateParentLayoutAndVpcs(parentGroupId, nextNodes);
         });
         setSelectedNodeId(subnetId);
         addLog(`➕ Added Subnet (Grouped).`, "success");
@@ -3352,61 +3345,22 @@ export default function CloudForgeEditor({
       if (parentGroupId) {
         const objId = `s3_obj_${Date.now()}`;
         setNodes((nds) => {
-          const currentChildren = nds.filter((n) => n.parentId === parentGroupId);
-          const newChildrenCount = currentChildren.length + 1;
-          const minHeight = 100 + Math.ceil(newChildrenCount / 2) * 80;
-          const minWidth = newChildrenCount > 1 ? 500 : 280;
-
-          const childIndex = currentChildren.length;
-          const row = Math.floor(childIndex / 2);
-          const col = childIndex % 2;
-
-          const nodeData = {
-            label: `new-object-${Math.floor(Math.random() * 1000)}`,
-            sourceType: "file",
-            sourcePath: "",
-            region: userSettings.defaultRegion,
-          };
-
           const objNode = {
             id: objId,
             type: "s3ObjectNode",
-            data: nodeData,
+            data: {
+              label: `new-object-${Math.floor(Math.random() * 1000)}`,
+              sourceType: "file",
+              sourcePath: "",
+              region: userSettings.defaultRegion,
+            },
             parentId: parentGroupId,
-            position: { x: 20 + col * 240, y: 60 + row * 80 },
+            position: { x: 0, y: 0 },
             zIndex: 0,
             selected: true,
           };
-
-          const updatedNodes = nds.map((n) => {
-            if (n.id === parentGroupId) {
-              const currentHeight = n.style?.height || 200;
-              const currentWidth = n.style?.width || 250;
-              return {
-                ...n,
-                selected: false,
-                style: {
-                  ...n.style,
-                  height: Math.max(currentHeight, minHeight),
-                  width: Math.max(currentWidth, minWidth),
-                },
-              };
-            }
-            if (n.parentId === parentGroupId) {
-              const idx = currentChildren.findIndex(child => child.id === n.id);
-              const r = Math.floor(idx / 2);
-              const c = idx % 2;
-              return {
-                ...n,
-                selected: false,
-                position: { x: 20 + c * 240, y: 60 + r * 80 },
-              };
-            }
-            return { ...n, selected: false };
-          });
-
-          const withoutObj = updatedNodes.filter((n) => n.id !== objNode.id);
-          return [...withoutObj, objNode];
+          const nextNodes = nds.map(n => ({ ...n, selected: false })).concat(objNode);
+          return updateParentLayoutAndVpcs(parentGroupId, nextNodes);
         });
         setSelectedNodeId(objId);
         addLog(`➕ Added S3 Object (Grouped).`, "success");
@@ -3463,10 +3417,6 @@ export default function CloudForgeEditor({
       if (parentGroupId) {
         const ec2Id = `ec2_${Date.now()}`;
         setNodes((nds) => {
-          const currentChildren = nds.filter((n) => n.parentId === parentGroupId);
-          const newChildrenCount = currentChildren.length + 1;
-          const cfg = getGroupLayoutConfig("subnetNode", newChildrenCount);
-
           const ec2Node = {
             id: ec2Id,
             type: "ec2Node",
@@ -3481,33 +3431,11 @@ export default function CloudForgeEditor({
               cost: calculateEC2Cost("t2.micro", 8, userSettings.defaultRegion, "Linux"),
             },
             parentId: parentGroupId,
-            position: cfg.getChildPosition(currentChildren.length),
+            position: { x: 60, y: 0 },
             zIndex: 0,
           };
-
-          const updatedNodes = nds.map((n) => {
-            if (n.id === parentGroupId) {
-              return {
-                ...n,
-                style: {
-                  ...n.style,
-                  height: cfg.minHeight,
-                  width: cfg.minWidth,
-                },
-              };
-            }
-            if (n.parentId === parentGroupId) {
-              const idx = currentChildren.findIndex(child => child.id === n.id);
-              return {
-                ...n,
-                position: cfg.getChildPosition(idx),
-              };
-            }
-            return n;
-          });
-
-          const withoutEc2 = updatedNodes.filter((n) => n.id !== ec2Node.id);
-          return [...withoutEc2, ec2Node];
+          const nextNodes = nds.concat(ec2Node);
+          return updateParentLayoutAndVpcs(parentGroupId, nextNodes);
         });
         setSelectedNodeId(ec2Id);
         addLog(`➕ Added EC2 Instance (Grouped).`, "success");
@@ -3558,60 +3486,21 @@ export default function CloudForgeEditor({
       if (parentGroupId) {
         const userId = `iam_user_${Date.now()}`;
         setNodes((nds) => {
-          const currentChildren = nds.filter((n) => n.parentId === parentGroupId);
-          const newChildrenCount = currentChildren.length + 1;
-          const minHeight = 100 + Math.ceil(newChildrenCount / 2) * 80;
-          const minWidth = newChildrenCount > 1 ? 500 : 280;
-
-          const childIndex = currentChildren.length;
-          const row = Math.floor(childIndex / 2);
-          const col = childIndex % 2;
-
-          const nodeData = {
-            label: `new-user-${Math.floor(Math.random() * 1000)}`,
-            iamType: "User",
-            region: userSettings.defaultRegion,
-          };
-
           const userNode = {
             id: userId,
             type: "iamNode",
-            data: nodeData,
+            data: {
+              label: `new-user-${Math.floor(Math.random() * 1000)}`,
+              iamType: "User",
+              region: userSettings.defaultRegion,
+            },
             parentId: parentGroupId,
-            position: { x: 20 + col * 240, y: 60 + row * 80 },
+            position: { x: 0, y: 0 },
             zIndex: 0,
             selected: true,
           };
-
-          const updatedNodes = nds.map((n) => {
-            if (n.id === parentGroupId) {
-              const currentHeight = n.style?.height || 200;
-              const currentWidth = n.style?.width || 250;
-              return {
-                ...n,
-                selected: false,
-                style: {
-                  ...n.style,
-                  height: Math.max(currentHeight, minHeight),
-                  width: Math.max(currentWidth, minWidth),
-                },
-              };
-            }
-            if (n.parentId === parentGroupId) {
-              const idx = currentChildren.findIndex(child => child.id === n.id);
-              const r = Math.floor(idx / 2);
-              const c = idx % 2;
-              return {
-                ...n,
-                selected: false,
-                position: { x: 20 + c * 240, y: 60 + r * 80 },
-              };
-            }
-            return { ...n, selected: false };
-          });
-
-          const withoutUser = updatedNodes.filter((n) => n.id !== userNode.id);
-          return [...withoutUser, userNode];
+          const nextNodes = nds.map(n => ({ ...n, selected: false })).concat(userNode);
+          return updateParentLayoutAndVpcs(parentGroupId, nextNodes);
         });
         setSelectedNodeId(userId);
         addLog(`➕ Added IAM User (Grouped).`, "success");
@@ -3734,7 +3623,7 @@ export default function CloudForgeEditor({
 
   const clearCanvas = () => {
     const hasGroupWithChildren = nodes.some((node) => {
-      const isGroup = node.type === "iamGroupNode" || node.type === "s3Node";
+      const isGroup = node.type === "iamGroupNode" || node.type === "s3Node" || node.type === "vpcNode" || node.type === "subnetNode";
       if (isGroup) {
         const hasChildren = nodes.some((child) => child.parentId === node.id);
         if (hasChildren) return true;
@@ -4054,11 +3943,11 @@ export default function CloudForgeEditor({
   const getExportButtonClass = () => {
     switch (activeMode) {
       case "audit":
-        return "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_4px_15px_rgba(79,70,229,0.3)]";
+        return "bg-indigo-600/70 hover:bg-indigo-600/80 backdrop-blur-md text-white border border-indigo-500/30 shadow-[0_4px_15px_rgba(79,70,229,0.2)]";
       case "budgets":
-        return "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_4px_15px_rgba(16,185,129,0.3)]";
+        return "bg-emerald-600/70 hover:bg-emerald-600/80 backdrop-blur-md text-white border border-emerald-500/30 shadow-[0_4px_15px_rgba(16,185,129,0.2)]";
       default:
-        return "bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-[0_4px_15px_rgba(245,158,11,0.3)]";
+        return "bg-amber-500/70 hover:bg-amber-500/80 backdrop-blur-md text-white dark:text-zinc-950 border border-amber-500/30 shadow-[0_4px_15px_rgba(245,158,11,0.2)]";
     }
   };
 
@@ -4384,7 +4273,7 @@ export default function CloudForgeEditor({
           <div className="flex items-center gap-4 pointer-events-auto relative">
             <button
               onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
-              className={`p-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-600 dark:text-zinc-400 ${getMenuHoverClass()} shadow-sm dark:shadow-xl transition-colors`}
+              className={`p-3 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md border border-slate-200/50 dark:border-zinc-800/50 rounded-xl text-slate-600 dark:text-zinc-400 ${getMenuHoverClass()} hover:bg-slate-50/50 dark:hover:bg-zinc-800/40 shadow-sm dark:shadow-xl transition-colors`}
             >
               <Menu size={20} />
             </button>
@@ -4394,7 +4283,7 @@ export default function CloudForgeEditor({
                 e.stopPropagation();
                 setIsProjectDropdownOpen(!isProjectDropdownOpen);
               }}
-              className="flex items-center gap-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 px-4 py-2.5 rounded-xl shadow-sm dark:shadow-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors"
+              className="flex items-center gap-3 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md border border-slate-200/50 dark:border-zinc-800/50 px-4 py-2.5 rounded-xl shadow-sm dark:shadow-xl cursor-pointer hover:bg-slate-50/50 dark:hover:bg-zinc-800/40 transition-colors"
             >
               <div className={`p-1.5 rounded-md bg-gradient-to-tr ${getLogoGradientClass()} text-white shadow-md`}>
                 <Layers size={16} />
@@ -4411,26 +4300,26 @@ export default function CloudForgeEditor({
             </div>
 
             {/* UNDO / REDO CONTROLS */}
-            <div className="flex items-center gap-1 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 p-1 rounded-xl shadow-sm dark:shadow-xl transition-colors">
+            <div className="flex items-center gap-1 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md border border-slate-200/50 dark:border-zinc-800/50 p-1 rounded-xl shadow-sm dark:shadow-xl transition-colors">
               <button
                 onClick={undo}
                 disabled={past.length === 0}
-                className={`p-1.5 rounded-lg transition-colors ${past.length === 0 ? "text-slate-300 dark:text-zinc-700 cursor-not-allowed" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"}`}
+                className={`p-1.5 rounded-lg transition-colors ${past.length === 0 ? "text-slate-300 dark:text-zinc-700 cursor-not-allowed" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100/50 dark:hover:bg-zinc-800/40 hover:text-slate-900 dark:hover:text-white"}`}
               >
                 <Undo size={18} />
               </button>
-              <div className="w-px h-4 bg-slate-200 dark:bg-zinc-800 mx-0.5"></div>
+              <div className="w-px h-4 bg-slate-200/50 dark:bg-zinc-800/50 mx-0.5"></div>
               <button
                 onClick={redo}
                 disabled={future.length === 0}
-                className={`p-1.5 rounded-lg transition-colors ${future.length === 0 ? "text-slate-300 dark:text-zinc-700 cursor-not-allowed" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"}`}
+                className={`p-1.5 rounded-lg transition-colors ${future.length === 0 ? "text-slate-300 dark:text-zinc-700 cursor-not-allowed" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100/50 dark:hover:bg-zinc-800/40 hover:text-slate-900 dark:hover:text-white"}`}
               >
                 <Redo size={18} />
               </button>
             </div>
 
             {/* MODE SWITCHER CONTROLS */}
-            <div className="flex items-center gap-1 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 p-1 rounded-xl shadow-sm dark:shadow-xl transition-colors h-10">
+            <div className="flex items-center gap-1 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md border border-slate-200/50 dark:border-zinc-800/50 p-1 rounded-xl shadow-sm dark:shadow-xl transition-colors h-10">
               <button
                 onClick={() => setActiveMode("dev")}
                 className={`flex items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition-all h-8 ${activeMode === "dev"
@@ -4572,7 +4461,7 @@ export default function CloudForgeEditor({
                     }
                   }
                 }}
-                className="w-full h-11 pl-10 pr-4 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-medium text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-amber-500 shadow-sm dark:shadow-xl transition-all"
+                className="w-full h-11 pl-10 pr-4 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md border border-slate-200/50 dark:border-zinc-800/50 rounded-xl text-sm font-medium text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-amber-500 shadow-sm dark:shadow-xl transition-all"
               />
 
               {/* Search Autocomplete Dropdown */}
@@ -4668,14 +4557,14 @@ export default function CloudForgeEditor({
           <div className="flex items-center gap-3 pointer-events-auto">
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
+              className="p-2.5 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md border border-slate-200/50 dark:border-zinc-800/50 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-50/50 dark:hover:bg-zinc-800/40 shadow-sm dark:shadow-xl transition-colors"
               title="Settings"
             >
               <Settings size={18} />
             </button>
             <button
               onClick={() => setIsDocsOpen(true)}
-              className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
+              className="p-2.5 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md border border-slate-200/50 dark:border-zinc-800/50 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-50/50 dark:hover:bg-zinc-800/40 shadow-sm dark:shadow-xl transition-colors"
               title="Documentations"
             >
               <BookOpen size={18} />
@@ -4685,15 +4574,15 @@ export default function CloudForgeEditor({
                 fetchDeploymentsList();
                 setIsDeploymentsModalOpen(true);
               }}
-              className="p-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 shadow-sm dark:shadow-xl transition-colors"
+              className="p-2.5 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md border border-slate-200/50 dark:border-zinc-800/50 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-50/50 dark:hover:bg-zinc-800/40 shadow-sm dark:shadow-xl transition-colors"
               title="Deployment History"
             >
               <History size={18} />
             </button>
-            <div className="h-6 w-px bg-slate-300 dark:bg-zinc-800 mx-1" />
+            <div className="h-6 w-px bg-slate-300/50 dark:bg-zinc-800/50 mx-1" />
             <button
               onClick={() => setIsDiagnosticsOpen(true)}
-              className="flex items-center gap-2 px-4 h-11 text-xs font-bold rounded-xl bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-200 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-300 shadow-sm dark:shadow-xl transition-all"
+              className="flex items-center gap-2 px-4 h-11 text-xs font-bold rounded-xl bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md border border-slate-200/50 dark:border-zinc-800/50 hover:bg-slate-50/50 dark:hover:bg-zinc-800/40 text-slate-600 dark:text-zinc-300 shadow-sm dark:shadow-xl transition-all"
             >
               <Terminal size={14} /> Diagnostics
             </button>
@@ -4708,7 +4597,7 @@ export default function CloudForgeEditor({
 
         {/* FLOATING LEFT SIDEBAR (Accordion IDE Style) */}
         <aside
-          className={`absolute top-24 bottom-6 z-30 overflow-hidden transition-all duration-300 ease-in-out border border-slate-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl flex flex-col rounded-2xl shadow-xl dark:shadow-2xl ${isLeftPanelOpen ? "left-6 w-72 translate-x-0 pointer-events-auto" : "left-0 w-0 -translate-x-full opacity-0 pointer-events-none"}`}
+          className={`absolute top-24 bottom-6 z-30 overflow-hidden transition-all duration-300 ease-in-out border border-slate-200/50 dark:border-zinc-800/50 bg-white/70 dark:bg-zinc-950/40 backdrop-blur-xl flex flex-col rounded-2xl shadow-xl dark:shadow-2xl ${isLeftPanelOpen ? "left-6 w-72 translate-x-0 pointer-events-auto" : "left-0 w-0 -translate-x-full opacity-0 pointer-events-none"}`}
         >
           <div className="flex flex-col w-72 h-full overflow-hidden">
             {/* SEARCH INPUT BAR */}
@@ -4804,7 +4693,7 @@ export default function CloudForgeEditor({
 
         {/* FLOATING RIGHT SIDEBAR */}
         {selectedNode && (
-          <aside className="absolute top-24 right-6 bottom-6 w-80 z-30 border border-slate-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl flex flex-col overflow-hidden rounded-2xl shadow-xl dark:shadow-2xl animate-fade-in">
+          <aside className="absolute top-24 right-6 bottom-6 w-96 z-30 border border-slate-200/50 dark:border-zinc-800/50 bg-white/70 dark:bg-zinc-950/40 backdrop-blur-xl flex flex-col overflow-hidden rounded-2xl shadow-xl dark:shadow-2xl animate-fade-in">
             <div className="p-5 pb-36 flex flex-col flex-1 space-y-6 overflow-y-auto custom-scrollbar">
               <div className="flex items-center gap-2 border-b border-slate-100 dark:border-zinc-800/80 pb-3">
                 <Settings2
@@ -5782,8 +5671,8 @@ export default function CloudForgeEditor({
 
         {/* SETTINGS MODAL */}
         {isSettingsOpen && (
-          <div className="fixed inset-0 bg-slate-900/20 dark:bg-zinc-950/80 backdrop-blur-sm z-[70] flex items-center justify-center p-6 animate-fade-in">
-            <div className="settings-modal bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-md flex flex-col overflow-visible shadow-2xl">
+          <div className="fixed inset-0 bg-slate-900/20 dark:bg-zinc-950/60 backdrop-blur-md z-[70] flex items-center justify-center p-6 animate-fade-in">
+            <div className="settings-modal bg-white/85 dark:bg-zinc-950/60 backdrop-blur-xl border border-slate-200/50 dark:border-zinc-800/50 rounded-2xl w-full max-w-md flex flex-col overflow-visible shadow-2xl">
               <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-zinc-900">
                 <div className="flex items-center gap-3 text-slate-900 dark:text-zinc-100">
                   <Settings size={20} className="text-amber-500" />
@@ -6534,18 +6423,7 @@ export default function CloudForgeEditor({
                   setConnectionSearchActiveIndex(0);
                 }}
                 onKeyDown={(e) => {
-                  const connectionResourceOptions = [
-                    { value: "s3", label: "S3 Bucket", icon: Database, nodeType: "s3Node", labelType: null },
-                    { value: "ec2", label: "EC2 Instance", icon: Server, nodeType: "ec2Node", labelType: null },
-                    { value: "user", label: "IAM User", icon: User, nodeType: "iamNode", labelType: "User" },
-                    { value: "group", label: "IAM Group", icon: Users, nodeType: "iamGroupNode", labelType: "Group" },
-                    { value: "role", label: "IAM Role", icon: Shield, nodeType: "iamNode", labelType: "Role" },
-                    { value: "policy", label: "IAM Policy", icon: Key, nodeType: "iamNode", labelType: "Policy" },
-                    { value: "rect", label: "Rectangle Group", icon: Square, nodeType: "shapeNode", labelType: "Rectangle" },
-                    { value: "circle", label: "Circle Group", icon: CircleIcon, nodeType: "shapeNode", labelType: "Circle" },
-                    { value: "text", label: "Text Label", icon: Type, nodeType: "shapeNode", labelType: "Text" },
-                  ];
-                  const filtered = connectionResourceOptions.filter((opt) =>
+                  const filtered = CONNECTION_RESOURCE_OPTIONS.filter((opt) =>
                     opt.label.toLowerCase().includes(connectionSearchQuery.toLowerCase())
                   );
 
@@ -6575,18 +6453,7 @@ export default function CloudForgeEditor({
             </div>
             <div className="flex flex-col max-h-48 overflow-y-auto scroll-smooth custom-scrollbar p-0.5 gap-0.5">
               {(() => {
-                const connectionResourceOptions = [
-                  { value: "s3", label: "S3 Bucket", icon: Database, nodeType: "s3Node", labelType: null },
-                  { value: "ec2", label: "EC2 Instance", icon: Server, nodeType: "ec2Node", labelType: null },
-                  { value: "user", label: "IAM User", icon: User, nodeType: "iamNode", labelType: "User" },
-                  { value: "group", label: "IAM Group", icon: Users, nodeType: "iamGroupNode", labelType: "Group" },
-                  { value: "role", label: "IAM Role", icon: Shield, nodeType: "iamNode", labelType: "Role" },
-                  { value: "policy", label: "IAM Policy", icon: Key, nodeType: "iamNode", labelType: "Policy" },
-                  { value: "rect", label: "Rectangle Group", icon: Square, nodeType: "shapeNode", labelType: "Rectangle" },
-                  { value: "circle", label: "Circle Group", icon: CircleIcon, nodeType: "shapeNode", labelType: "Circle" },
-                  { value: "text", label: "Text Label", icon: Type, nodeType: "shapeNode", labelType: "Text" },
-                ];
-                const filtered = connectionResourceOptions.filter((opt) =>
+                const filtered = CONNECTION_RESOURCE_OPTIONS.filter((opt) =>
                   opt.label.toLowerCase().includes(connectionSearchQuery.toLowerCase())
                 );
                 return (
@@ -7523,7 +7390,7 @@ export default function CloudForgeEditor({
         {/* Floating Cloud Audit findings summary panel */}
         {activeMode === "audit" && !selectedNode && !isAuditLegendCollapsed && (
           <aside
-            className="absolute top-24 right-6 bottom-6 w-80 z-30 bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl border border-slate-200 dark:border-zinc-800 p-4 rounded-2xl shadow-xl dark:shadow-2xl flex flex-col gap-3 pointer-events-auto overflow-hidden transition-all duration-300 animate-fade-in"
+            className="absolute top-24 right-6 bottom-6 w-96 z-30 bg-white/70 dark:bg-zinc-950/40 backdrop-blur-xl border border-slate-200/50 dark:border-zinc-800/50 p-4 rounded-2xl shadow-xl dark:shadow-2xl flex flex-col gap-3 pointer-events-auto overflow-hidden transition-all duration-300 animate-fade-in"
           >
             <div className="flex items-center justify-between gap-4 border-b border-slate-100 dark:border-zinc-900 pb-2">
               <div className="flex items-center gap-2">
