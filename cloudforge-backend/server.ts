@@ -117,7 +117,7 @@ class CloudForgeStack extends TerraformStack {
         sgs.forEach((sgConfig) => {
           if (!sgConfig) return;
           const sgId = sgConfig.id || `sg-legacy-${node.id}`;
-          
+
           if (!generatedSgs.has(sgId)) {
             const sgName = sgConfig.name || `${node.data.label.toLowerCase().replace(/[^a-z0-9-]/g, '-')}-sg`;
             const safeSgId = sgId.replace(/[^a-zA-Z0-9]/g, '');
@@ -1045,7 +1045,7 @@ app.get('/api/deploy/stream', (req, res) => {
   const runTerraformCommand = (args: string[]): Promise<number> => {
     return new Promise((resolve) => {
       sendSSE({ type: "stdout", text: `\n✨ Running: terraform ${args.join(' ')}\n` });
-      
+
       const proc = spawn(terraformCmd, args, { cwd: deployDir });
       activeProcess = proc;
 
@@ -1159,7 +1159,7 @@ if (!fs.existsSync(DEPLOYMENTS_DIR)) {
 app.get('/api/deploy/status', (_req, res) => {
   const deployedFilePath = path.join(__dirname, 'deployed-cdk.tf.json');
   const deployed = fs.existsSync(deployedFilePath);
-  
+
   let latestDeploymentId: string | null = null;
   if (fs.existsSync(DEPLOYMENTS_DIR)) {
     const files = fs.readdirSync(DEPLOYMENTS_DIR)
@@ -1169,7 +1169,7 @@ app.get('/api/deploy/status', (_req, res) => {
       latestDeploymentId = files[0].replace('.json', '');
     }
   }
-  
+
   res.json({ deployed, latestDeploymentId });
 });
 
@@ -1181,7 +1181,7 @@ app.get('/api/deployments', (_req, res) => {
     }
     const files = fs.readdirSync(DEPLOYMENTS_DIR)
       .filter(f => f.startsWith('deploy-') && f.endsWith('.json'));
-    
+
     const deployments = files.map(file => {
       const filePath = path.join(DEPLOYMENTS_DIR, file);
       const content = fs.readFileSync(filePath, 'utf-8');
@@ -1215,7 +1215,7 @@ app.post('/api/deployments/redeploy', (req, res) => {
     }
     const targetPath = path.join(deployDir, 'cdk.tf.json');
     fs.writeFileSync(targetPath, JSON.stringify(record.code, null, 2), 'utf-8');
-    
+
     res.json({ success: true, message: "Code loaded into active workspace" });
   } catch (err) {
     res.status(500).json({ error: "Failed to redeploy configuration", details: String(err) });
@@ -1290,7 +1290,7 @@ app.get('/api/destroy/stream', (req, res) => {
   const runTerraformCommand = (args: string[]): Promise<number> => {
     return new Promise((resolve) => {
       sendSSE({ type: "stdout", text: `\n✨ Running: terraform ${args.join(' ')}\n` });
-      
+
       const proc = spawn(terraformCmd, args, { cwd: deployDir });
       activeProcess = proc;
 
@@ -1360,7 +1360,277 @@ app.get('/api/destroy/stream', (req, res) => {
   });
 });
 
-const PORT = 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 CloudForge CDKTF Compiler Engine running on http://localhost:${PORT}`);
+app.post('/api/validate-key', async (req, res) => {
+    const { provider, model, apiKey, customBaseUrl } = req.body;
+    console.log("Validating key for provider:", provider, "with requested model:", model);
+
+    if (!provider || !apiKey) {
+      res.status(400).json({ success: false, error: "Provider and API Key are required." });
+      return;
+    }
+
+    try {
+      if (provider === 'gemini') {
+        const checkModel = model || 'gemini-3.6-flash';
+        const url = `${customBaseUrl || 'https://generativelanguage.googleapis.com'}/v1beta/models/${checkModel}:generateContent?key=${apiKey}`;
+        console.log(`[Handshake] Querying Gemini model: ${checkModel} at URL: ${url.replace(apiKey, "REDACTED")}`);
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: "ping" }] }]
+          })
+        });
+
+        const data = await response.json() as any;
+
+        if (response.ok) {
+          console.log(`[Handshake] Gemini verification succeeded.`);
+          res.json({ success: true });
+        } else {
+          console.error("Gemini Key Validation Error response:", JSON.stringify(data));
+          const errMsg = data?.error?.message || (data?.error ? JSON.stringify(data.error) : "Invalid API key or model configuration.");
+          res.status(response.status).json({
+            success: false,
+            error: `Gemini API Error: ${errMsg}`
+          });
+        }
+      } else if (provider === 'claude') {
+        const checkModel = model || 'claude-sonnet-5';
+        const url = `${customBaseUrl || 'https://api.anthropic.com'}/v1/messages`;
+        console.log(`[Handshake] Querying Claude model: ${checkModel} at URL: ${url}`);
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: checkModel,
+            max_tokens: 5,
+            messages: [{ role: "user", content: "ping" }]
+          })
+        });
+
+        const data = await response.json() as any;
+
+        if (response.ok) {
+          console.log(`[Handshake] Claude verification succeeded.`);
+          res.json({ success: true });
+        } else {
+          console.error("Claude Key Validation Error response:", JSON.stringify(data));
+          const errMsg = data?.error?.message || (data?.error ? JSON.stringify(data.error) : "Invalid API key or model configuration.");
+          res.status(response.status).json({
+            success: false,
+            error: `Claude API Error: ${errMsg}`
+          });
+        }
+      } else {
+        res.status(400).json({ success: false, error: "Unknown provider." });
+      }
+    } catch (err: any) {
+      console.error("Validation Connection Error:", err);
+      res.status(500).json({ success: false, error: `Connection failed: ${err.message}` });
+    }
+  });
+
+app.post('/api/survey/next-question', async (req, res) => {
+  const { provider, model, apiKey, customBaseUrl, history, topicIndex } = req.body;
+
+  if (!provider || !apiKey || topicIndex === undefined) {
+    res.status(400).json({ success: false, error: "Provider, API Key, and topicIndex are required." });
+    return;
+  }
+
+  const historyString = (history || [])
+    .map((h: any) => `Question: ${h.question}\nAnswer: ${h.answer}`)
+    .join("\n\n");
+
+  const prompt = `You are an expert Cloud Solutions Architect surveyor. Your job is to dynamically ask the user the next question in a cloud design survey to gather specifications for building a cloud architecture diagram.
+
+The current target topic index is ${topicIndex}.
+Topics list:
+0. Organization: What kind of organization they have (e.g. startup, enterprise, SaaS, e-commerce, etc.)
+1. Cloud Drivers: Why they want to move to/build in the cloud (scalability, compliance, migration, cost-savings, etc.)
+2. Workload: What exactly they want to build (e.g., three-tier web application, data pipeline, serverless API, etc.)
+3. Rationale: Why they want to build this specific workload (business goals, high availability, etc.)
+4. Tech & Deployment: How they want to build it (e.g., preference for AWS, specific databases, containers vs VMs, etc.)
+
+Conversation history so far:
+${historyString || "No history yet (this is the first question)."}
+
+Generate a clear, friendly, and engaging single question for the user targeting topic #${topicIndex}.
+Requirements:
+- Take the history of previous answers into account so the question feels personalized and natural.
+- Return ONLY the raw question text. Do not add headers, prefix labels, explanations, or markdown code fences. Just output the question.`;
+
+  try {
+    let questionText = "";
+    if (provider === 'gemini') {
+      const checkModel = model || 'gemini-3.6-flash';
+      const url = `${customBaseUrl || 'https://generativelanguage.googleapis.com'}/v1beta/models/${checkModel}:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+      const data = await response.json() as any;
+      if (!response.ok) {
+        res.status(response.status).json({ success: false, error: data?.error?.message || "Gemini API error." });
+        return;
+      }
+      questionText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    } else if (provider === 'claude') {
+      const checkModel = model || 'claude-sonnet-5';
+      const url = `${customBaseUrl || 'https://api.anthropic.com'}/v1/messages`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: checkModel,
+          max_tokens: 150,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      const data = await response.json() as any;
+      if (!response.ok) {
+        res.status(response.status).json({ success: false, error: data?.error?.message || "Claude API error." });
+        return;
+      }
+      questionText = data?.content?.[0]?.text?.trim() || "";
+    } else {
+      res.status(400).json({ success: false, error: "Unknown provider." });
+      return;
+    }
+
+    res.json({ success: true, question: questionText });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: `Connection failed: ${err.message}` });
+  }
 });
+
+app.post('/api/survey/generate-diagram', async (req, res) => {
+  const { provider, model, apiKey, customBaseUrl, history } = req.body;
+
+  if (!provider || !apiKey) {
+    res.status(400).json({ success: false, error: "Provider and API Key are required." });
+    return;
+  }
+
+  const historyString = (history || [])
+    .map((h: any) => `Question: ${h.question}\nAnswer: ${h.answer}`)
+    .join("\n\n");
+
+  const prompt = `You are an expert Cloud Solutions Architect. Based on the user's survey responses below:
+${historyString}
+
+Generate an initial cloud architecture layout.
+Return ONLY a valid JSON object matching the following structure. Do not wrap in markdown code fences. Do not output any explanation text.
+
+JSON Structure:
+{
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "ec2Node" | "s3Node" | "iamNode",
+      "data": {
+        "label": "Web Server (EC2)",
+        "region": "us-east-1",
+        "instanceType": "t3.micro",
+        "volumeSize": 20
+      },
+      "position": { "x": 100, "y": 100 }
+    }
+  ],
+  "edges": [
+    { "source": "node_1", "target": "node_2" }
+  ]
+}
+
+Guidelines:
+- Supported node types are 'ec2Node', 's3Node', and 'iamNode'.
+- Nodes should have a label and relevant configuration in \`data\`.
+- Position x and y coordinates must be spaced out cleanly (e.g. increments of 250px or 300px horizontally/vertically) so they do not overlap.
+- Return ONLY valid JSON, with no explanation or wrapping.`;
+
+  try {
+    let rawText = "";
+    if (provider === 'gemini') {
+      const checkModel = model || 'gemini-3.6-flash';
+      const url = `${customBaseUrl || 'https://generativelanguage.googleapis.com'}/v1beta/models/${checkModel}:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+      const data = await response.json() as any;
+      if (!response.ok) {
+        res.status(response.status).json({ success: false, error: data?.error?.message || "Gemini API error." });
+        return;
+      }
+      rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    } else if (provider === 'claude') {
+      const checkModel = model || 'claude-sonnet-5';
+      const url = `${customBaseUrl || 'https://api.anthropic.com'}/v1/messages`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: checkModel,
+          max_tokens: 1500,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      const data = await response.json() as any;
+      if (!response.ok) {
+        res.status(response.status).json({ success: false, error: data?.error?.message || "Claude API error." });
+        return;
+      }
+      rawText = data?.content?.[0]?.text?.trim() || "";
+    } else {
+      res.status(400).json({ success: false, error: "Unknown provider." });
+      return;
+    }
+
+    // Clean up code fences if returned
+    let cleanText = rawText;
+    if (cleanText.includes("```")) {
+      const matches = cleanText.match(/```(?:json)?([\s\S]*?)```/);
+      if (matches && matches[1]) {
+        cleanText = matches[1].trim();
+      }
+    }
+
+    try {
+      const diagram = JSON.parse(cleanText);
+      res.json({ success: true, diagram });
+    } catch (parseErr) {
+      console.error("JSON parsing failed. Raw response:", rawText);
+      res.status(500).json({ success: false, error: "Failed to parse generated layout. AI model response was not valid JSON.", rawResponse: rawText });
+    }
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: `Connection failed: ${err.message}` });
+  }
+});
+
+  const PORT = 3001;
+  app.listen(PORT, () => {
+    console.log(`🚀 CloudForge CDKTF Compiler Engine running on http://localhost:${PORT}`);
+  });

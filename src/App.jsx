@@ -277,6 +277,9 @@ export default function App() {
           userSettings={userSettings}
           updateSettings={updateSettings}
           onOpenProjectsDashboard={() => setAppState("projects-dashboard")}
+          onCreateProject={handleCreateProject}
+          onRenameProject={handleUpdateProjectName}
+          onDeleteProject={handleDeleteProject}
         />
       </ReactFlowProvider>
     </div>

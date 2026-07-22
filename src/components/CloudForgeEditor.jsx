@@ -18,11 +18,11 @@ import {
 } from "@xyflow/react";
 import {
   Play, Download, Code, Layers, Terminal, Trash2, Settings2, X, CheckCircle2, Check, Database,
-  Scissors, ClipboardPaste, Copy, Menu, HardDrive, CloudLightning, ChevronRight, ChevronDown,
+  Scissors, ClipboardPaste, Copy, Menu, HardDrive, CloudLightning, ChevronRight, ChevronLeft, ChevronDown,
   Activity, FolderOpen, Plus, AlertTriangle, FolderPlus, ArrowLeft, Clock, Settings, Moon, Sun,
   Sparkles, Save, Search, Square, Circle as CircleIcon, Type, Undo, Redo, User, Users, Key,
   Shield, Coins, Maximize2, Edit, File, Folder, Upload, Server, History, Cpu, ArrowUpRight,
-  ArrowUpDown, Edit3, Keyboard, BookOpen, Network, Globe, Compass, ShieldAlert
+  ArrowUpDown, Edit3, Keyboard, BookOpen, Network, Globe, Compass, ShieldAlert, ArrowRight
 } from "lucide-react";
 import { CustomSelect, RegionSelect, STANDARD_REGIONS } from "./CustomSelect";
 import { nodeTypes, ModeContext, SettingsContext, AuditBadge } from "./CustomNodes";
@@ -1632,6 +1632,157 @@ const CONNECTION_RESOURCE_OPTIONS = [
   { value: "text", label: "Text Label", icon: Type, nodeType: "shapeNode", labelType: "Text" },
 ];
 // ==========================================
+// 2.5 BUILDER WORKSPACE FLOW CANVAS COMPONENTS
+// ==========================================
+const BuilderCanvasHelper = ({
+  project,
+  onSaveProject,
+  isBuildingLive,
+  setIsBuildingLive,
+  pendingNodes,
+  pendingEdges,
+  nodes,
+  setNodes,
+  edges,
+  setEdges
+}) => {
+  const { setCenter, fitView } = useReactFlow();
+  const [statusText, setStatusText] = useState("");
+  const [liveNodesCount, setLiveNodesCount] = useState(0);
+
+  // Load existing project nodes if not building live
+  useEffect(() => {
+    if (!isBuildingLive) {
+      setNodes(project.nodes || []);
+      setEdges(project.edges || []);
+    }
+  }, [project.id, isBuildingLive]);
+
+  // Live build animation sequence
+  useEffect(() => {
+    if (isBuildingLive && pendingNodes.length > 0) {
+      setNodes([]);
+      setEdges([]);
+      setStatusText("Initializing live canvas...");
+      setLiveNodesCount(0);
+      
+      let nodeIdx = 0;
+      let edgeIdx = 0;
+
+      const interval = setInterval(() => {
+        if (nodeIdx < pendingNodes.length) {
+          const nextNode = pendingNodes[nodeIdx];
+          setStatusText(`Adding ${nextNode.data?.label || "Resource Node"}...`);
+          
+          setNodes((prev) => {
+            const updated = [...prev, {
+              ...nextNode,
+              className: "animate-pulse border-2 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.6)]"
+            }];
+            return updated;
+          });
+
+          setCenter(nextNode.position.x + 80, nextNode.position.y + 40, { zoom: 1.1, duration: 600 });
+          setLiveNodesCount(nodeIdx + 1);
+          nodeIdx++;
+        } else if (edgeIdx < pendingEdges.length) {
+          const nextEdge = pendingEdges[edgeIdx];
+          setStatusText(`Connecting networks...`);
+          setEdges((prev) => [...prev, nextEdge]);
+          edgeIdx++;
+        } else {
+          clearInterval(interval);
+          setStatusText("Architecture successfully compiled!");
+          setIsBuildingLive(false);
+          
+          // Remove pulsing highlights
+          setNodes((prev) => prev.map(n => ({ ...n, className: "" })));
+          
+          onSaveProject(project.id, pendingNodes, pendingEdges);
+          
+          setTimeout(() => {
+            fitView({ duration: 800, padding: 0.2 });
+          }, 400);
+        }
+      }, 900);
+
+      return () => clearInterval(interval);
+    }
+  }, [isBuildingLive, pendingNodes, pendingEdges]);
+
+  return (
+    <>
+      {isBuildingLive && (
+        <div className="absolute top-4 left-4 right-4 z-10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border border-amber-500/30 px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between gap-4 animate-scale-up">
+          <div className="flex items-center gap-3">
+            <div className="relative h-7 w-7 shrink-0 flex items-center justify-center bg-amber-500/10 rounded-lg text-amber-500">
+              <Sparkles size={16} className="animate-spin-slow" />
+            </div>
+            <div>
+              <span className="text-[10px] font-black text-slate-800 dark:text-zinc-100 uppercase tracking-wider block">
+                AI Architect Live Building
+              </span>
+              <p className="text-[10px] text-amber-600 dark:text-amber-500 font-bold mt-0.5 animate-pulse">
+                {statusText}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-[9px] font-black text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 px-3 py-1 rounded-full border border-slate-200/50 dark:border-zinc-800">
+              Nodes: {liveNodesCount} / {pendingNodes.length}
+            </div>
+            <div className="text-[9px] font-black text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 px-3 py-1 rounded-full border border-slate-200/50 dark:border-zinc-800">
+              Edges: {edges.length} / {pendingEdges.length}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+const BuilderCanvas = ({ 
+  project, 
+  onSaveProject, 
+  isBuildingLive, 
+  setIsBuildingLive, 
+  pendingNodes, 
+  pendingEdges 
+}) => {
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  return (
+    <div className="w-full h-full relative rounded-3xl overflow-hidden border border-slate-200 dark:border-zinc-850 bg-slate-50 dark:bg-zinc-950 shadow-inner">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodeTypes={nodeTypes}
+        fitView
+        className="builder-flow-canvas"
+      >
+        <Background color="#cbd5e1" darkColor="#18181b" gap={18} size={1} />
+      </ReactFlow>
+
+      <BuilderCanvasHelper
+        project={project}
+        onSaveProject={onSaveProject}
+        isBuildingLive={isBuildingLive}
+        setIsBuildingLive={setIsBuildingLive}
+        pendingNodes={pendingNodes}
+        pendingEdges={pendingEdges}
+        nodes={nodes}
+        setNodes={setNodes}
+        edges={edges}
+        setEdges={setEdges}
+      />
+    </div>
+  );
+};
+
+// ==========================================
 // 3. MAIN APP: The Floating Editor
 // ==========================================
 export default function CloudForgeEditor({
@@ -1643,9 +1794,322 @@ export default function CloudForgeEditor({
   userSettings,
   updateSettings,
   onOpenProjectsDashboard,
+  onCreateProject,
+  onRenameProject,
+  onDeleteProject,
 }) {
   const { screenToFlowPosition, fitView, getIntersectingNodes, getNode } = useReactFlow();
   const reactFlowWrapper = useRef(null);
+  const [isSecondaryScreenOpen, setIsSecondaryScreenOpen] = useState(false);
+  const [sideEditingId, setSideEditingId] = useState(null);
+  const [sideEditName, setSideEditName] = useState("");
+  const [sideConfirmDeleteId, setSideConfirmDeleteId] = useState(null);
+  const [sideNewProjName, setSideNewProjName] = useState("");
+  const [sideIsCreating, setSideIsCreating] = useState(false);
+  const [sideProjectManagerOpen, setSideProjectManagerOpen] = useState(false);
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createStep, setCreateStep] = useState(1);
+  const [newProjName, setNewProjName] = useState("");
+  const [selectedProvider, setSelectedProvider] = useState("gemini"); // "gemini" | "claude"
+  const [selectedModel, setSelectedModel] = useState("gemini-3.6-flash");
+  const [apiKey, setApiKey] = useState("");
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [isVerifyingKey, setIsVerifyingKey] = useState(false);
+  const [verificationSuccess, setVerificationSuccess] = useState(false);
+  const [verificationError, setVerificationError] = useState(null);
+  const [surveyStep, setSurveyStep] = useState(0);
+  const [surveyHistory, setSurveyHistory] = useState([]);
+  const [currentQuestionText, setCurrentQuestionText] = useState("");
+  const [userAnswerText, setUserAnswerText] = useState("");
+  const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
+  const [isGeneratingDiagram, setIsGeneratingDiagram] = useState(false);
+  const [pendingNodes, setPendingNodes] = useState([]);
+  const [pendingEdges, setPendingEdges] = useState([]);
+  const [isBuildingLive, setIsBuildingLive] = useState(false);
+
+  const [builderProjects, setBuilderProjects] = useState(() => {
+    try {
+      const saved = localStorage.getItem("builder_projects");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Failed to load builder projects", e);
+      return [];
+    }
+  });
+
+  const [activeBuilderProjectId, setActiveBuilderProjectId] = useState(() => {
+    try {
+      const saved = localStorage.getItem("active_builder_project_id");
+      return saved || null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("builder_projects", JSON.stringify(builderProjects));
+  }, [builderProjects]);
+
+  useEffect(() => {
+    if (activeBuilderProjectId) {
+      localStorage.setItem("active_builder_project_id", activeBuilderProjectId);
+    } else {
+      localStorage.removeItem("active_builder_project_id");
+    }
+  }, [activeBuilderProjectId]);
+
+  const handleCreateBuilderProject = (name, provider, model, key, baseUrl) => {
+    const newProj = {
+      id: `bp_${Date.now()}`,
+      name: name,
+      updatedAt: Date.now(),
+      nodes: [],
+      edges: [],
+      provider: provider,
+      model: model,
+      apiKey: key,
+      customBaseUrl: baseUrl || "",
+    };
+    setBuilderProjects((prev) => [...prev, newProj]);
+    setActiveBuilderProjectId(newProj.id);
+  };
+
+  const handleVerifyApiKey = async () => {
+    setIsVerifyingKey(true);
+    setVerificationSuccess(false);
+    setVerificationError(null);
+
+    try {
+      const response = await fetch("http://localhost:3001/api/validate-key", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          model: selectedModel,
+          apiKey: apiKey.trim(),
+          customBaseUrl: customBaseUrl.trim() || undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setVerificationSuccess(true);
+        setTimeout(() => {
+          setIsVerifyingKey(false);
+          setVerificationSuccess(false);
+          startSurveyFlow();
+        }, 1500);
+      } else {
+        setVerificationError(data.error || "Connection failed. Please check your credentials.");
+        setIsVerifyingKey(false);
+      }
+    } catch (err) {
+      setVerificationError(err instanceof Error ? err.message : "Connection failed. Please check backend server status.");
+      setIsVerifyingKey(false);
+    }
+  };
+
+  const startSurveyFlow = async () => {
+    setCreateStep(4);
+    setSurveyStep(0);
+    setSurveyHistory([]);
+    setUserAnswerText("");
+    setIsGeneratingQuestion(true);
+    setVerificationError(null);
+
+    try {
+      const response = await fetch("http://localhost:3001/api/survey/next-question", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          model: selectedModel,
+          apiKey: apiKey.trim(),
+          customBaseUrl: customBaseUrl.trim() || undefined,
+          history: [],
+          topicIndex: 0
+        })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setCurrentQuestionText(data.question);
+      } else {
+        setVerificationError(data.error || "Failed to generate first survey question.");
+      }
+    } catch (err) {
+      setVerificationError(err instanceof Error ? err.message : "Failed to connect to backend server.");
+    } finally {
+      setIsGeneratingQuestion(false);
+    }
+  };
+
+  const handleNextSurveyStep = async () => {
+    if (!userAnswerText.trim()) return;
+
+    const updatedHistory = [
+      ...surveyHistory,
+      { question: currentQuestionText, answer: userAnswerText.trim() }
+    ];
+    setSurveyHistory(updatedHistory);
+    setUserAnswerText("");
+    setVerificationError(null);
+
+    const nextStep = surveyStep + 1;
+    setSurveyStep(nextStep);
+
+    if (nextStep >= 5) {
+      setIsGeneratingDiagram(true);
+      try {
+        const response = await fetch("http://localhost:3001/api/survey/generate-diagram", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: selectedProvider,
+            model: selectedModel,
+            apiKey: apiKey.trim(),
+            customBaseUrl: customBaseUrl.trim() || undefined,
+            history: updatedHistory
+          })
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+          const nodes = data.diagram.nodes || [];
+          const edges = data.diagram.edges || [];
+
+          // Assign default node shapes/types or let standard mapping handle it
+          const finalNodes = nodes.map((node, i) => {
+            const defaultPos = { x: 100 + (i % 3) * 300, y: 150 + Math.floor(i / 3) * 250 };
+            return {
+              id: node.id || `node_${Date.now()}_${i}`,
+              type: node.type || "ec2Node",
+              position: node.position || defaultPos,
+              data: {
+                label: node.data?.label || "Node",
+                region: node.data?.region || "us-east-1",
+                ...node.data
+              }
+            };
+          });
+
+          const finalEdges = edges.map((edge, i) => ({
+            id: `edge_${Date.now()}_${i}`,
+            source: edge.source,
+            target: edge.target,
+            animated: true,
+            style: { stroke: "#f59e0b", strokeWidth: 2 }
+          }));
+
+          const newProj = {
+            id: `bp_${Date.now()}`,
+            name: newProjName.trim(),
+            updatedAt: Date.now(),
+            nodes: [],
+            edges: [],
+            provider: selectedProvider,
+            model: selectedModel,
+            apiKey: apiKey.trim(),
+            customBaseUrl: customBaseUrl.trim() || "",
+          };
+          setBuilderProjects((prev) => [...prev, newProj]);
+          setActiveBuilderProjectId(newProj.id);
+          setPendingNodes(finalNodes);
+          setPendingEdges(finalEdges);
+          setIsBuildingLive(true);
+          setSideProjectManagerOpen(false);
+          setShowCreateModal(false);
+        } else {
+          setVerificationError(data.error || "Failed to generate initial cloud architecture layout.");
+          setSurveyStep(4);
+        }
+      } catch (err) {
+        setVerificationError(err instanceof Error ? err.message : "Failed to connect to server during canvas generation.");
+        setSurveyStep(4);
+      } finally {
+        setIsGeneratingDiagram(false);
+      }
+    } else {
+      setIsGeneratingQuestion(true);
+      try {
+        const response = await fetch("http://localhost:3001/api/survey/next-question", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: selectedProvider,
+            model: selectedModel,
+            apiKey: apiKey.trim(),
+            customBaseUrl: customBaseUrl.trim() || undefined,
+            history: updatedHistory,
+            topicIndex: nextStep
+          })
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+          setCurrentQuestionText(data.question);
+        } else {
+          setVerificationError(data.error || "Failed to generate next question.");
+          setSurveyStep(surveyStep);
+          setSurveyHistory(surveyHistory);
+        }
+      } catch (err) {
+        setVerificationError(err instanceof Error ? err.message : "Failed to connect to backend server.");
+        setSurveyStep(surveyStep);
+        setSurveyHistory(surveyHistory);
+      } finally {
+        setIsGeneratingQuestion(false);
+      }
+    }
+  };
+
+  const handleBackSurveyStep = () => {
+    if (surveyStep === 0) {
+      setCreateStep(3);
+      return;
+    }
+
+    const prevStep = surveyStep - 1;
+    setSurveyStep(prevStep);
+    const prevHistory = [...surveyHistory];
+    const lastQA = prevHistory.pop();
+    setSurveyHistory(prevHistory);
+    
+    if (lastQA) {
+      setCurrentQuestionText(lastQA.question);
+      setUserAnswerText(lastQA.answer);
+    }
+    setVerificationError(null);
+  };
+
+  const handleRenameBuilderProject = (id, newName) => {
+    setBuilderProjects((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, name: newName, updatedAt: Date.now() } : p))
+    );
+  };
+
+  const handleDeleteBuilderProject = (id) => {
+    setBuilderProjects((prev) => prev.filter((p) => p.id !== id));
+    if (activeBuilderProjectId === id) {
+      setActiveBuilderProjectId(null);
+    }
+  };
+
+  const handleSaveBuilderProject = (id, updatedNodes, updatedEdges) => {
+    setBuilderProjects((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, nodes: updatedNodes, edges: updatedEdges, updatedAt: Date.now() }
+          : p
+      )
+    );
+  };
+
+  const activeBuilderProject = builderProjects.find((p) => p.id === activeBuilderProjectId) || null;
+
   const connectionStartParams = useRef(null);
   const [floatingConnectionSearch, setFloatingConnectionSearch] = useState(null);
   const [connectionSearchQuery, setConnectionSearchQuery] = useState("");
@@ -4597,7 +5061,11 @@ export default function CloudForgeEditor({
 
         {/* FLOATING LEFT SIDEBAR (Accordion IDE Style) */}
         <aside
-          className={`absolute top-24 bottom-6 z-30 overflow-hidden transition-all duration-300 ease-in-out border border-slate-200/50 dark:border-zinc-800/50 bg-white/70 dark:bg-zinc-950/40 backdrop-blur-xl flex flex-col rounded-2xl shadow-xl dark:shadow-2xl ${isLeftPanelOpen ? "left-6 w-72 translate-x-0 pointer-events-auto" : "left-0 w-0 -translate-x-full opacity-0 pointer-events-none"}`}
+          className={`absolute top-24 bottom-6 left-6 w-72 z-30 overflow-hidden transition-all duration-300 ease-in-out border border-slate-200/50 dark:border-zinc-800/50 bg-white/70 dark:bg-zinc-950/40 backdrop-blur-xl flex flex-col rounded-2xl shadow-xl dark:shadow-2xl ${
+            isLeftPanelOpen
+              ? "translate-x-0 opacity-100 pointer-events-auto"
+              : "-translate-x-[calc(100%+1.5rem)] opacity-0 pointer-events-none"
+          }`}
         >
           <div className="flex flex-col w-72 h-full overflow-hidden">
             {/* SEARCH INPUT BAR */}
@@ -4625,7 +5093,18 @@ export default function CloudForgeEditor({
 
             {/* SCROLLABLE CATEGORIES LIST */}
             <div className="flex-1 overflow-y-auto no-scrollbar p-3 flex flex-col gap-2">
-              {filteredCategories.length === 0 ? (
+              {projects.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center gap-3">
+                  <FolderOpen size={32} className="text-slate-300 dark:text-zinc-700 mb-1 animate-pulse" />
+                  <p className="text-xs font-bold text-slate-500 dark:text-zinc-400">No projects created</p>
+                  <button
+                    onClick={onNewProjectFlow}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-white dark:text-black font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    Create New Project
+                  </button>
+                </div>
+              ) : filteredCategories.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
                   <Search size={24} className="text-slate-300 dark:text-zinc-700 mb-2 animate-pulse" />
                   <p className="text-xs font-bold text-slate-500 dark:text-zinc-400">No nodes found</p>
@@ -7587,6 +8066,721 @@ export default function CloudForgeEditor({
             }}
           />
         )}
+
+        {/* RIGHT BOUNDARY PULL BUTTON */}
+        <button
+          onClick={() => setIsSecondaryScreenOpen(true)}
+          className={`fixed top-1/2 right-0 -translate-y-1/2 z-40 flex items-center justify-center w-8 h-24 bg-white/80 dark:bg-zinc-900/80 hover:bg-white dark:hover:bg-zinc-900 border-l border-y border-slate-200/80 dark:border-zinc-800/80 rounded-l-2xl shadow-2xl backdrop-blur-md text-slate-500 hover:text-amber-500 dark:text-zinc-400 dark:hover:text-amber-400 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group hover:w-10 ${
+            isSecondaryScreenOpen ? "opacity-0 pointer-events-none translate-x-full" : "opacity-100"
+          }`}
+          title="Pull for Secondary Screen"
+        >
+          <ChevronLeft size={20} className="group-hover:-translate-x-0.5 transition-transform duration-200" />
+        </button>
+
+        {/* SECONDARY SCREEN SLIDE-OVER */}
+        <div
+          className={`fixed inset-0 z-[60] bg-slate-50 dark:bg-zinc-955 text-slate-800 dark:text-zinc-200 transition-transform duration-[1400ms] ease-[cubic-bezier(0.22,1,0.36,1)] flex gap-6 items-stretch justify-start p-6 shadow-2xl overflow-hidden ${
+            isSecondaryScreenOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
+          }`}
+        >
+          {/* LEFT BOUNDARY PULL-BACK BUTTON */}
+          <button
+            onClick={() => setIsSecondaryScreenOpen(false)}
+            className="absolute top-1/2 left-0 -translate-y-1/2 z-50 flex items-center justify-center w-8 h-24 bg-white/80 dark:bg-zinc-900/80 hover:bg-white dark:hover:bg-zinc-900 border-r border-y border-slate-200/80 dark:border-zinc-800/80 rounded-r-2xl shadow-2xl backdrop-blur-md text-slate-500 hover:text-amber-500 dark:text-zinc-400 dark:hover:text-amber-400 transition-all duration-300 group hover:w-10"
+            title="Pull Back to Main Screen"
+          >
+            <ChevronRight size={20} className="group-hover:translate-x-0.5 transition-transform duration-200" />
+          </button>
+          
+          <button
+            onClick={() => setSideProjectManagerOpen(!sideProjectManagerOpen)}
+            className="absolute top-0 left-0 z-50 w-24 h-24 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-xl border-r border-b border-slate-200/50 dark:border-zinc-800/80 rounded-br-full flex items-start justify-start p-5 text-slate-500 hover:text-amber-500 dark:text-zinc-400 dark:hover:text-amber-400 shadow-md transition-all duration-300 ease-in-out hover:scale-110 origin-top-left group cursor-pointer"
+            title={sideProjectManagerOpen ? "Close Side Projects Manager" : "Open Side Projects Manager"}
+          >
+            <FolderOpen size={22} className="group-hover:rotate-6 transition-transform duration-300" />
+          </button>
+
+          {/* BUILDER SECTION: SIDE PROJECTS MANAGER DASHBOARD */}
+          {sideProjectManagerOpen && (
+            <div className="w-80 shrink-0 h-full flex flex-col bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-850 p-6 rounded-3xl shadow-xl animate-slide-right text-left z-10 overflow-hidden shrink-0">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-zinc-800 pb-4 mb-6 shrink-0 mt-8">
+                <div>
+                  <h2 className="text-sm font-black bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent uppercase tracking-wider">
+                    Workspaces
+                  </h2>
+                  <p className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5">
+                    Local architecture builders.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSideIsCreating(true)}
+                  className="flex items-center justify-center p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-955 shadow transition-all active:scale-95 cursor-pointer"
+                  title="New Project"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+
+              {/* Inline New Project Form */}
+              {sideIsCreating && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (sideNewProjName.trim()) {
+                      handleCreateBuilderProject(sideNewProjName.trim());
+                      setSideNewProjName("");
+                      setSideIsCreating(false);
+                    }
+                  }}
+                  className="mb-4 bg-white dark:bg-zinc-900 border border-amber-500/30 p-3 rounded-xl flex items-center justify-between gap-3 shadow-md animate-fade-in shrink-0"
+                >
+                  <input
+                    type="text"
+                    value={sideNewProjName}
+                    onChange={(e) => setSideNewProjName(e.target.value)}
+                    placeholder="Workspace name..."
+                    autoFocus
+                    className="flex-1 h-8 px-2 bg-slate-50 dark:bg-zinc-950 text-[10px] font-bold text-slate-800 dark:text-zinc-200 rounded-lg border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="submit"
+                      className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-450 text-white dark:text-zinc-955 text-[10px] font-bold cursor-pointer"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSideIsCreating(false);
+                        setSideNewProjName("");
+                      }}
+                      className="px-2 py-1 rounded bg-slate-100 dark:bg-zinc-800 text-slate-500 text-[10px] font-bold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Projects List Container */}
+              <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2.5 custom-scrollbar">
+                {builderProjects.length === 0 ? (
+                  <div className="bg-slate-50 dark:bg-zinc-950/40 border border-slate-100 dark:border-zinc-850 p-6 rounded-2xl flex flex-col items-center justify-center text-center gap-2 shadow-inner">
+                    <FolderOpen size={24} className="text-slate-300 dark:text-zinc-700 animate-pulse" />
+                    <h4 className="text-slate-700 dark:text-zinc-300 font-bold text-xs">No workspaces</h4>
+                    <button
+                      onClick={() => {
+                        setNewProjName("");
+                        setSelectedProvider("gemini");
+                        setSelectedModel("gemini-3.6-flash");
+                        setApiKey("");
+                        setCustomBaseUrl("");
+                        setCreateStep(1);
+                        setShowCreateModal(true);
+                      }}
+                      className="mt-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-450 text-white dark:text-zinc-955 rounded-lg text-[9px] font-black uppercase tracking-wider cursor-pointer"
+                    >
+                      Create First
+                    </button>
+                  </div>
+                ) : (
+                  builderProjects
+                    .slice()
+                    .sort((a, b) => b.updatedAt - a.updatedAt)
+                    .map((proj) => {
+                      const isActive = proj.id === activeBuilderProjectId;
+                      const isEditing = sideEditingProjectId === proj.id;
+                      return (
+                        <div
+                          key={proj.id}
+                          onClick={() => {
+                            if (!isEditing) {
+                              setActiveBuilderProjectId(proj.id);
+                            }
+                          }}
+                          className={`group border p-3 rounded-xl flex items-center justify-between gap-3 transition-all ${
+                            isActive
+                              ? "bg-amber-500/10 border-amber-500/30 text-slate-800 dark:text-zinc-100"
+                              : "bg-white/80 dark:bg-zinc-900/40 border-slate-105 dark:border-zinc-900 text-slate-700 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900/60 cursor-pointer"
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0 flex items-center gap-2.5">
+                            <span className={`p-1.5 rounded-lg text-xs ${
+                              isActive ? "bg-amber-500 text-white dark:text-zinc-955" : "bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400"
+                            }`}>
+                              <CloudLightning size={14} />
+                            </span>
+                            <div className="flex-1 min-w-0 text-left">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={sideEditName}
+                                  onChange={(e) => setSideEditName(e.target.value)}
+                                  className="w-full h-7 px-2 bg-slate-50 dark:bg-zinc-950 text-[10px] font-bold text-slate-800 dark:text-zinc-200 rounded border border-amber-500 focus:outline-none"
+                                  autoFocus
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && sideEditName.trim()) {
+                                      handleRenameBuilderProject(proj.id, sideEditName.trim());
+                                      setSideEditingProjectId(null);
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <>
+                                  <h4 className="font-bold text-xs truncate leading-snug">
+                                    {proj.name}
+                                  </h4>
+                                  <p className="text-[8px] font-mono text-slate-400 dark:text-zinc-500 mt-0.5 uppercase tracking-wide truncate">
+                                    {proj.provider} • {proj.model}
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {isEditing ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (sideEditName.trim()) {
+                                    handleRenameBuilderProject(proj.id, sideEditName.trim());
+                                    setSideEditingProjectId(null);
+                                  }
+                                }}
+                                className="p-1 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded cursor-pointer"
+                              >
+                                <Check size={12} />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSideEditingProjectId(proj.id);
+                                  setSideEditName(proj.name);
+                                }}
+                                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded cursor-pointer"
+                                title="Rename Project"
+                              >
+                                <Edit size={12} />
+                              </button>
+                            )}
+
+                            {sideConfirmDeleteId === proj.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteBuilderProject(proj.id);
+                                    setSideConfirmDeleteId(null);
+                                  }}
+                                  className="px-1.5 py-0.5 bg-rose-500 hover:bg-rose-600 text-white rounded text-[8px] font-black uppercase cursor-pointer"
+                                >
+                                  Yes
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSideConfirmDeleteId(null);
+                                  }}
+                                  className="px-1.5 py-0.5 bg-slate-100 dark:bg-zinc-800 text-slate-505 dark:text-zinc-400 rounded text-[8px] font-black uppercase cursor-pointer"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSideConfirmDeleteId(proj.id);
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded cursor-pointer"
+                                title="Delete Project"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* BUILDER SECTION: MAIN VIEW SCREEN */}
+          <div className="flex-1 h-full flex flex-col gap-4 relative overflow-hidden ml-16 mt-8">
+            {activeBuilderProject ? (
+              <>
+                {/* Header */}
+                <div className="h-16 px-6 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl flex items-center justify-between shadow-sm shrink-0 text-left">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 shadow-inner">
+                      <CloudLightning size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-slate-800 dark:text-zinc-100 leading-snug">
+                        {activeBuilderProject.name}
+                      </h3>
+                      <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-wide flex items-center gap-1.5 mt-0.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        {activeBuilderProject.provider} • {activeBuilderProject.model}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setNewProjName(activeBuilderProject.name);
+                        setSelectedProvider(activeBuilderProject.provider);
+                        setSelectedModel(activeBuilderProject.model);
+                        setApiKey(activeBuilderProject.apiKey);
+                        setCustomBaseUrl(activeBuilderProject.customBaseUrl);
+                        setCreateStep(1);
+                        setShowCreateModal(true);
+                      }}
+                      className="px-3.5 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-slate-100 text-slate-700 dark:text-zinc-300 rounded-xl font-bold text-[10px] cursor-pointer transition-all flex items-center gap-1.5"
+                    >
+                      <Sparkles size={12} className="text-amber-500" /> Rebuild
+                    </button>
+                    <button
+                      onClick={() => setActiveBuilderProjectId(null)}
+                      className="px-3.5 py-2 bg-rose-50 dark:bg-rose-955/20 hover:bg-rose-100 text-rose-600 dark:text-rose-400 rounded-xl font-bold text-[10px] cursor-pointer transition-all border border-rose-200/20"
+                    >
+                      Close Project
+                    </button>
+                  </div>
+                </div>
+
+                {/* Canvas Wrapper */}
+                <div className="flex-1 relative overflow-hidden">
+                  <ReactFlowProvider>
+                    <BuilderCanvas
+                      project={activeBuilderProject}
+                      onSaveProject={handleSaveBuilderProject}
+                      isBuildingLive={isBuildingLive}
+                      setIsBuildingLive={setIsBuildingLive}
+                      pendingNodes={pendingNodes}
+                      pendingEdges={pendingEdges}
+                    />
+                  </ReactFlowProvider>
+                </div>
+              </>
+            ) : (
+              /* Welcome Screen (No project loaded) */
+              <div className="flex-1 flex flex-col items-center justify-center text-center gap-6 select-none max-w-2xl mx-auto">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="h-20 w-20 rounded-3xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white dark:text-zinc-955 font-bold shadow-[0_8px_30px_rgba(245,158,11,0.25)] animate-bounce-slow">
+                    <CloudLightning size={44} />
+                  </div>
+                  <div>
+                    <h1 className="text-4xl sm:text-5xl font-black tracking-tight uppercase bg-gradient-to-r from-amber-400 via-fuchsia-500 to-indigo-500 bg-clip-text text-transparent py-2">
+                      Builder Workspace
+                    </h1>
+                    <p className="text-sm font-medium text-slate-500 dark:text-zinc-400 max-w-md mt-1 leading-relaxed">
+                      Build production-grade infrastructure with the latest AI models. Click below to start the dynamic survey questionnaire.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 mt-6">
+                    <button
+                      onClick={() => {
+                        setNewProjName("");
+                        setSelectedProvider("gemini");
+                        setSelectedModel("gemini-3.6-flash");
+                        setApiKey("");
+                        setCustomBaseUrl("");
+                        setCreateStep(1);
+                        setShowCreateModal(true);
+                      }}
+                      className="px-6 py-3 bg-slate-900 dark:bg-zinc-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-zinc-955 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-2 group"
+                    >
+                      <FolderPlus size={16} /> Create Project
+                    </button>
+                    <button
+                      onClick={() => setIsSecondaryScreenOpen(false)}
+                      className="px-6 py-3 bg-white/80 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 rounded-xl font-bold text-sm shadow-sm transition-all active:scale-95 cursor-pointer"
+                    >
+                      Back to Canvas
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* MULTI-STEP CREATION MODAL OVERLAY */}
+          {showCreateModal && (
+            <div className="fixed inset-0 z-[70] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in">
+              <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-3xl shadow-2xl w-full max-w-4xl min-h-[500px] flex flex-col justify-between overflow-hidden transition-all duration-300 animate-scale-up max-h-[90vh]">
+                
+                {/* Progress Indicator */}
+                <div className="h-1.5 w-full bg-slate-100 dark:bg-zinc-800 flex">
+                  <div 
+                    className="bg-amber-500 h-full transition-all duration-300"
+                    style={{ width: `${(createStep / 3) * 100}%` }}
+                  />
+                </div>
+
+                {/* Modal Body */}
+                <div className="flex-1 p-8 md:p-10 flex flex-col justify-between overflow-y-auto">
+                  
+                  {/* Step 1: Project Name */}
+                  {createStep === 1 && (
+                    <div className="flex-1 flex flex-col justify-start animate-fade-in text-left pt-4">
+                      <div>
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-zinc-100">
+                          Create New Workspace
+                        </h3>
+                        <p className="text-xs text-slate-400 dark:text-zinc-500 mt-1.5">
+                          Give your cloud architecture builder project a unique local name.
+                        </p>
+                      </div>
+                      <div className="mt-8">
+                        <input
+                          type="text"
+                          value={newProjName}
+                          onChange={(e) => setNewProjName(e.target.value)}
+                          placeholder="e.g. production-kubernetes-cluster"
+                          autoFocus
+                          className="w-full h-14 px-5 bg-slate-50 dark:bg-zinc-950 text-base font-bold text-slate-800 dark:text-zinc-200 rounded-2xl border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 2: Select AI Model */}
+                  {createStep === 2 && (
+                    <div className="flex-1 flex flex-col justify-start animate-fade-in text-left pt-4">
+                      <div>
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-zinc-100">
+                          Select AI Model
+                        </h3>
+                        <p className="text-xs text-slate-400 dark:text-zinc-500 mt-1.5">
+                          Choose the AI model variant from Google Gemini or Anthropic Claude to generate your infrastructure nodes.
+                        </p>
+                      </div>
+
+                      {/* Custom Grouped Dropdown Selector */}
+                      <div className="mt-8 relative">
+                        <label className="text-xs font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Model Variant</label>
+                        <div className="relative mt-2">
+                          <button
+                            type="button"
+                            onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                            className="w-full h-12 px-4 bg-slate-50 dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-200 rounded-xl border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-all cursor-pointer shadow-sm flex items-center justify-between hover:bg-slate-100 dark:hover:bg-zinc-900"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">
+                                {selectedProvider}
+                              </span>
+                              <span>{selectedModel}</span>
+                            </span>
+                            <ChevronDown size={16} className={`text-slate-400 dark:text-zinc-500 transition-transform duration-200 ${modelDropdownOpen ? "rotate-180" : ""}`} />
+                          </button>
+                          
+                          {modelDropdownOpen && (
+                            <>
+                              {/* Backdrop to close on click outside */}
+                              <div className="fixed inset-0 z-10" onClick={() => setModelDropdownOpen(false)} />
+                              
+                              <div className="absolute left-0 right-0 mt-2 z-20 bg-white dark:bg-zinc-955 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl overflow-hidden py-1.5 animate-scale-up max-h-[230px] overflow-y-auto custom-scrollbar">
+                                {[
+                                  { type: "header", label: "Google Gemini" },
+                                  { value: "gemini-3.6-flash", label: "gemini-3.6-flash (Default)", provider: "gemini" },
+                                  { value: "gemini-3.5-flash", label: "gemini-3.5-flash", provider: "gemini" },
+                                  { value: "gemini-3.5-flash-lite", label: "gemini-3.5-flash-lite", provider: "gemini" },
+                                  { value: "gemini-3.5-pro", label: "gemini-3.5-pro", provider: "gemini" },
+                                  
+                                  { type: "header", label: "Anthropic Claude" },
+                                  { value: "claude-sonnet-5", label: "claude-sonnet-5 (Default)", provider: "claude" },
+                                  { value: "claude-fable-5", label: "claude-fable-5 (Reasoning)", provider: "claude" },
+                                  { value: "claude-sonnet-4.6", label: "claude-sonnet-4.6", provider: "claude" },
+                                  { value: "claude-haiku-4.5", label: "claude-haiku-4.5", provider: "claude" },
+                                  { value: "claude-opus-4.8", label: "claude-opus-4.8", provider: "claude" }
+                                ].map((opt, idx) => {
+                                  if (opt.type === "header") {
+                                    return (
+                                      <div 
+                                        key={`header-${idx}`} 
+                                        className="px-4 py-2 mt-2 first:mt-0 text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500 bg-slate-50 dark:bg-zinc-900/40 select-none border-y border-slate-100 dark:border-zinc-800/60"
+                                      >
+                                        {opt.label}
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <div
+                                      key={opt.value}
+                                      onClick={() => {
+                                        setSelectedModel(opt.value);
+                                        setSelectedProvider(opt.provider);
+                                        setModelDropdownOpen(false);
+                                      }}
+                                      className={`px-6 py-2.5 text-xs font-bold cursor-pointer transition-colors ${
+                                        selectedModel === opt.value
+                                          ? "bg-amber-500 text-white dark:text-zinc-950"
+                                          : "text-slate-700 dark:text-zinc-300 hover:bg-amber-500/10 hover:text-amber-500"
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 3: Authentication */}
+                  {createStep === 3 && (
+                    <div className="flex-1 flex flex-col justify-start animate-fade-in text-left pt-4 relative min-h-[220px]">
+                      {isVerifyingKey ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 dark:bg-zinc-900/90 z-30 transition-all rounded-2xl">
+                          {verificationSuccess ? (
+                            <div className="flex flex-col items-center gap-3 animate-scale-up">
+                              <div className="h-16 w-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-500 shadow-lg shadow-emerald-500/20">
+                                <CheckCircle2 size={36} className="animate-bounce-slow" />
+                              </div>
+                              <span className="text-sm font-black text-slate-800 dark:text-zinc-100 animate-pulse">Connection Successful!</span>
+                              <span className="text-[10px] text-slate-400 dark:text-zinc-500">Creating workspace project...</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-3">
+                              <div className="relative h-14 w-14">
+                                <div className="absolute inset-0 rounded-full border-4 border-slate-100 dark:border-zinc-800" />
+                                <div className="absolute inset-0 rounded-full border-4 border-t-amber-500 animate-spin" />
+                              </div>
+                              <span className="text-sm font-black text-slate-800 dark:text-zinc-100">Verifying API Credentials...</span>
+                              <span className="text-[10px] text-slate-400 dark:text-zinc-500">Establishing test handshake with {selectedProvider}...</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+
+                      <div>
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-zinc-100">
+                          Configure Provider Credentials
+                        </h3>
+                        <p className="text-xs text-slate-400 dark:text-zinc-500 mt-1.5">
+                          Authenticate with the provider's API. Keys are stored locally in your browser workspace.
+                        </p>
+                      </div>
+
+                      {verificationError && (
+                        <div className="mt-4 p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-bold flex items-start gap-2.5 animate-shake">
+                          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                          <span>{verificationError}</span>
+                        </div>
+                      )}
+
+                      <div className="mt-6 flex flex-col gap-6">
+                        {/* API Key */}
+                        <div>
+                          <div className="flex justify-between items-center">
+                            <label className="text-xs font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">API Key (Required)</label>
+                            <button 
+                              type="button"
+                              onClick={() => setShowApiKey(!showApiKey)}
+                              className="text-xs font-bold text-amber-500 hover:text-amber-450 focus:outline-none"
+                            >
+                              {showApiKey ? "Hide Key" : "Show Key"}
+                            </button>
+                          </div>
+                          <input
+                            type={showApiKey ? "text" : "password"}
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            placeholder={selectedProvider === "gemini" ? "AIzaSy..." : "sk-ant-..."}
+                            className="w-full h-12 px-4 mt-2 bg-slate-50 dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-200 rounded-xl border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-sm"
+                          />
+                        </div>
+
+                        {/* Custom Base URL (Optional) */}
+                        <div>
+                          <label className="text-xs font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Custom Base URL (Optional)</label>
+                          <input
+                            type="text"
+                            value={customBaseUrl}
+                            onChange={(e) => setCustomBaseUrl(e.target.value)}
+                            placeholder={selectedProvider === "gemini" ? "https://generativelanguage.googleapis.com" : "https://api.anthropic.com"}
+                            className="w-full h-12 px-4 mt-2 bg-slate-50 dark:bg-zinc-955 text-xs font-bold text-slate-800 dark:text-zinc-200 rounded-xl border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 4: AI Survey Stage */}
+                  {createStep === 4 && (
+                    <div className="flex-1 flex flex-col justify-start animate-fade-in text-left pt-4 relative min-h-[250px]">
+                      {isGeneratingQuestion || isGeneratingDiagram ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 dark:bg-zinc-900/90 z-30 transition-all rounded-2xl">
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="relative h-14 w-14">
+                              <div className="absolute inset-0 rounded-full border-4 border-slate-100 dark:border-zinc-800" />
+                              <div className="absolute inset-0 rounded-full border-4 border-t-amber-500 animate-spin" />
+                            </div>
+                            <span className="text-sm font-black text-slate-800 dark:text-zinc-100">
+                              {isGeneratingDiagram 
+                                ? "Generating Architecture Layout..." 
+                                : `Formulating Question ${surveyStep + 1} of 5...`
+                              }
+                            </span>
+                            <span className="text-[10px] text-slate-400 dark:text-zinc-500">
+                              {isGeneratingDiagram 
+                                ? "Analyzing requirements to design your workspace canvas..." 
+                                : `Selected model (${selectedModel}) is reading history...`
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-500">
+                            AI Survey Stage
+                          </span>
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-zinc-100 mt-2">
+                            Question {surveyStep + 1} of 5
+                          </h3>
+                        </div>
+                        <div className="h-8 px-3 rounded-full bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-800 flex items-center justify-center">
+                          <span className="text-[10px] font-black text-slate-500 dark:text-zinc-400">
+                            {surveyStep === 0 && "Topic: Organization"}
+                            {surveyStep === 1 && "Topic: Cloud Drivers"}
+                            {surveyStep === 2 && "Topic: Workload Specification"}
+                            {surveyStep === 3 && "Topic: Business Goals"}
+                            {surveyStep === 4 && "Topic: Tech Preferences"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {verificationError && (
+                        <div className="mt-4 p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-bold flex items-start gap-2.5 animate-shake">
+                          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                          <span>{verificationError}</span>
+                        </div>
+                      )}
+
+                      <div className="mt-6 flex-1 flex flex-col justify-between">
+                        <div className="flex flex-col gap-4">
+                          <p className="text-sm font-bold text-slate-700 dark:text-zinc-200 leading-relaxed bg-slate-50 dark:bg-zinc-950 p-4 rounded-xl border border-slate-100 dark:border-zinc-900/60 shadow-inner">
+                            {currentQuestionText || "AI surveyor is processing..."}
+                          </p>
+
+                          <div>
+                            <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                              Your Answer
+                            </label>
+                            <textarea
+                              value={userAnswerText}
+                              onChange={(e) => setUserAnswerText(e.target.value)}
+                              placeholder="e.g. We are a scaling e-commerce startup, or we want high availability for a postgres database..."
+                              className="w-full h-24 p-4 mt-2 bg-slate-50 dark:bg-zinc-955 text-xs font-bold text-slate-800 dark:text-zinc-200 rounded-xl border border-slate-200 dark:border-zinc-800 focus:outline-none focus:border-amber-500 transition-colors shadow-sm resize-none"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Footer Controls */}
+                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-zinc-800/80 pt-6 mt-8">
+                    <div>
+                      {createStep === 4 ? (
+                        <button
+                          onClick={handleBackSurveyStep}
+                          disabled={isGeneratingQuestion || isGeneratingDiagram}
+                          className={`px-6 py-3 rounded-xl font-bold text-xs cursor-pointer transition-colors ${
+                            isGeneratingQuestion || isGeneratingDiagram
+                              ? "bg-slate-100/50 dark:bg-zinc-800/50 text-slate-400 dark:text-zinc-600 cursor-not-allowed" 
+                              : "bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-600 dark:text-zinc-300"
+                          }`}
+                        >
+                          Back
+                        </button>
+                      ) : createStep > 1 ? (
+                        <button
+                          onClick={() => setCreateStep((s) => s - 1)}
+                          disabled={isVerifyingKey}
+                          className={`px-6 py-3 rounded-xl font-bold text-xs cursor-pointer transition-colors ${
+                            isVerifyingKey 
+                              ? "bg-slate-100/50 dark:bg-zinc-800/50 text-slate-400 dark:text-zinc-600 cursor-not-allowed" 
+                              : "bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-600 dark:text-zinc-300"
+                          }`}
+                        >
+                          Back
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setShowCreateModal(false)}
+                          className="px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-600 dark:text-zinc-300 rounded-xl font-bold text-xs cursor-pointer transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+
+                    <div>
+                      {createStep === 4 ? (
+                        <button
+                          onClick={handleNextSurveyStep}
+                          disabled={!userAnswerText.trim() || isGeneratingQuestion || isGeneratingDiagram}
+                          className={`px-7 py-3 rounded-xl font-bold text-xs cursor-pointer transition-all ${
+                            !userAnswerText.trim() || isGeneratingQuestion || isGeneratingDiagram
+                              ? "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed"
+                              : "bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-md"
+                          }`}
+                        >
+                          {surveyStep === 4 
+                            ? (isGeneratingDiagram ? "Generating..." : "Generate Diagram")
+                            : (isGeneratingQuestion ? "Generating..." : "Next Question")
+                          }
+                        </button>
+                      ) : createStep < 3 ? (
+                        <button
+                          onClick={() => setCreateStep((s) => s + 1)}
+                          disabled={createStep === 1 && !newProjName.trim()}
+                          className={`px-7 py-3 rounded-xl font-bold text-xs cursor-pointer transition-all ${
+                            createStep === 1 && !newProjName.trim()
+                              ? "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed"
+                              : "bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-md"
+                          }`}
+                        >
+                          Next
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleVerifyApiKey}
+                          disabled={!apiKey.trim() || isVerifyingKey}
+                          className={`px-7 py-3 rounded-xl font-bold text-xs cursor-pointer transition-all ${
+                            !apiKey.trim() || isVerifyingKey
+                              ? "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed"
+                              : "bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-950 shadow-md"
+                          }`}
+                        >
+                          {isVerifyingKey ? "Verifying..." : "Verify & Create"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* TOAST NOTIFICATION */}
         {toast && (

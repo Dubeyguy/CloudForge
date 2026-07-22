@@ -159,8 +159,16 @@ export const WelcomeScreen = ({ projects, onCreateProject, onLoadProject }) => {
             </h2>
             <div className="flex-1 overflow-y-auto space-y-3 pr-2">
               {projects.length === 0 ? (
-                <div className="text-center py-10 text-slate-400 dark:text-zinc-500 font-medium">
-                  No saved projects found in local storage.
+                <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+                  <span className="text-slate-400 dark:text-zinc-500 font-medium">
+                    No projects created
+                  </span>
+                  <button
+                    onClick={() => setViewMode("new")}
+                    className="mt-2 bg-amber-500 hover:bg-amber-400 text-white dark:text-black font-bold px-4 py-2 rounded-xl transition-all shadow-md text-xs cursor-pointer"
+                  >
+                    Create New Project
+                  </button>
                 </div>
               ) : (
                 projects
