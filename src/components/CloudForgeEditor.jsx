@@ -450,29 +450,33 @@ const SubnetRtModal = ({ node, onClose, onUpdateNodeData }) => {
             </label>
           </div>
 
-          {isCustom && (
-            <div className="flex flex-col gap-3 animate-fade-in">
-              <div className="flex items-center justify-between">
-                <h4 className="text-[11px] font-bold text-slate-450 dark:text-zinc-500 uppercase tracking-wider">Routes List</h4>
+          <div className="flex flex-col gap-3 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h4 className="text-[11px] font-bold text-slate-450 dark:text-zinc-500 uppercase tracking-wider">
+                {isCustom ? "Custom Routes List" : "Default Routes List (Read-Only)"}
+              </h4>
+              {isCustom && (
                 <button
                   onClick={handleAddRoute}
                   className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-extrabold text-white bg-teal-600 hover:bg-teal-500 rounded-lg shadow-sm"
                 >
                   <Plus size={10} /> Add Route
                 </button>
-              </div>
+              )}
+            </div>
 
-              <div className="border border-slate-150 dark:border-zinc-850 rounded-xl overflow-hidden">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-zinc-900 border-b border-slate-150 dark:border-zinc-850 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
-                      <th className="p-3">Destination CIDR</th>
-                      <th className="p-3">Target</th>
-                      <th className="p-3 w-16 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {routes.map((route, index) => (
+            <div className="border border-slate-150 dark:border-zinc-850 rounded-xl overflow-hidden">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-zinc-900 border-b border-slate-150 dark:border-zinc-850 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                    <th className="p-3">Destination CIDR</th>
+                    <th className="p-3">Target</th>
+                    {isCustom && <th className="p-3 w-16 text-center">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {isCustom ? (
+                    routes.map((route, index) => (
                       <tr key={index} className="border-b border-slate-100 dark:border-zinc-900/50 last:border-0 bg-white dark:bg-zinc-950/40">
                         <td className="p-3">
                           <input
@@ -504,12 +508,31 @@ const SubnetRtModal = ({ node, onClose, onUpdateNodeData }) => {
                           </button>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  ) : (
+                    <>
+                      <tr className="border-b border-slate-100 dark:border-zinc-900/50 last:border-0 bg-white dark:bg-zinc-950/40 opacity-80">
+                        <td className="p-3 font-mono font-bold text-slate-600 dark:text-zinc-300">
+                          {node.data?.vpcCidr || "172.31.0.0/16"}
+                        </td>
+                        <td className="p-3 font-mono font-bold text-slate-600 dark:text-zinc-300">
+                          local
+                        </td>
+                      </tr>
+                      <tr className="border-b border-slate-100 dark:border-zinc-900/50 last:border-0 bg-white dark:bg-zinc-950/40 opacity-80">
+                        <td className="p-3 font-mono font-bold text-slate-600 dark:text-zinc-300">
+                          0.0.0.0/0
+                        </td>
+                        <td className="p-3 font-mono font-bold text-slate-600 dark:text-zinc-300 flex items-center gap-1.5">
+                          Internet Gateway <span className="bg-slate-100 dark:bg-zinc-800 text-[9px] px-1.5 py-0.5 rounded text-slate-400 dark:text-zinc-500 font-extrabold uppercase">Implicit</span>
+                        </td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -655,123 +678,129 @@ const SubnetNaclModal = ({ node, onClose, onUpdateNodeData }) => {
             </label>
           </div>
 
-          {isCustom && (
-            <div className="flex flex-col gap-3 animate-fade-in">
-              <div className="flex items-center justify-between border-b border-slate-150 dark:border-zinc-850 pb-1">
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => setActiveTab("inbound")}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      activeTab === "inbound"
-                        ? "bg-teal-50 text-teal-600 dark:bg-teal-950/20 dark:text-teal-400 border border-teal-100 dark:border-teal-900/25"
-                        : "text-slate-550 dark:text-zinc-450 hover:bg-slate-50 dark:hover:bg-zinc-900/30"
-                    }`}
-                  >
-                    Inbound Rules
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("outbound")}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      activeTab === "outbound"
-                        ? "bg-teal-50 text-teal-600 dark:bg-teal-950/20 dark:text-teal-400 border border-teal-100 dark:border-teal-900/25"
-                        : "text-slate-550 dark:text-zinc-450 hover:bg-slate-50 dark:hover:bg-zinc-900/30"
-                    }`}
-                  >
-                    Outbound Rules
-                  </button>
-                </div>
+          <div className="flex flex-col gap-3 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-150 dark:border-zinc-850 pb-1">
+              <div className="flex gap-1.5">
                 <button
+                  type="button"
+                  onClick={() => setActiveTab("inbound")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    activeTab === "inbound"
+                      ? "bg-teal-50 text-teal-600 dark:bg-teal-950/20 dark:text-teal-400 border border-teal-100 dark:border-teal-900/25"
+                      : "text-slate-550 dark:text-zinc-450 hover:bg-slate-50 dark:hover:bg-zinc-900/30"
+                  }`}
+                >
+                  Inbound Rules
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("outbound")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    activeTab === "outbound"
+                      ? "bg-teal-50 text-teal-600 dark:bg-teal-950/20 dark:text-teal-400 border border-teal-100 dark:border-teal-900/25"
+                      : "text-slate-550 dark:text-zinc-450 hover:bg-slate-50 dark:hover:bg-zinc-900/30"
+                  }`}
+                >
+                  Outbound Rules
+                </button>
+              </div>
+              {isCustom && (
+                <button
+                  type="button"
                   onClick={handleAddRule}
                   className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-extrabold text-white bg-teal-600 hover:bg-teal-500 rounded-lg shadow-sm"
                 >
                   <Plus size={10} /> Add Rule
                 </button>
-              </div>
+              )}
+            </div>
 
-              <div className="border border-slate-150 dark:border-zinc-850 rounded-xl overflow-hidden">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-zinc-900 border-b border-slate-150 dark:border-zinc-850 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
-                      <th className="p-2.5 w-16">Rule #</th>
-                      <th className="p-2.5">Type</th>
-                      <th className="p-2.5 w-20">Protocol</th>
-                      <th className="p-2.5 w-24">Port Range</th>
-                      <th className="p-2.5">{activeTab === "inbound" ? "Source" : "Destination"}</th>
-                      <th className="p-2.5 w-20">Action</th>
-                      <th className="p-2.5 w-12 text-center">Delete</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rulesToRender.map((rule, index) => {
-                      const isCatchAll = rule.ruleNumber === "*";
-                      return (
-                        <tr key={index} className="border-b border-slate-100 dark:border-zinc-900/50 last:border-0 bg-white dark:bg-zinc-950/40">
-                          <td className="p-2.5">
-                            <input
-                              type="text"
-                              value={rule.ruleNumber}
-                              disabled={isCatchAll}
-                              onChange={(e) => handleRuleChange(index, "ruleNumber", e.target.value)}
-                              className="bg-slate-50 dark:bg-zinc-900 disabled:opacity-60 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500 text-center font-semibold"
-                            />
-                          </td>
-                          <td className="p-2.5">
-                            <select
-                              value={rule.type}
-                              disabled={isCatchAll}
-                              onChange={(e) => handleRuleChange(index, "type", e.target.value)}
-                              className="bg-slate-50 dark:bg-zinc-900 disabled:opacity-60 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
-                            >
-                              <option value="All Traffic">All Traffic</option>
-                              <option value="HTTP (80)">HTTP (80)</option>
-                              <option value="HTTPS (443)">HTTPS (443)</option>
-                              <option value="SSH (22)">SSH (22)</option>
-                              <option value="RDP (3389)">RDP (3389)</option>
-                              <option value="Custom TCP">Custom TCP</option>
-                            </select>
-                          </td>
-                          <td className="p-2.5">
-                            <input
-                              type="text"
-                              value={rule.protocol}
-                              disabled={isCatchAll || rule.type !== "Custom TCP"}
-                              onChange={(e) => handleRuleChange(index, "protocol", e.target.value)}
-                              className="bg-slate-50 dark:bg-zinc-900 disabled:opacity-60 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 text-center focus:outline-none focus:border-teal-500"
-                            />
-                          </td>
-                          <td className="p-2.5">
-                            <input
-                              type="text"
-                              value={rule.portRange}
-                              disabled={isCatchAll || (rule.type !== "Custom TCP" && rule.type !== "All Traffic")}
-                              onChange={(e) => handleRuleChange(index, "portRange", e.target.value)}
-                              className="bg-slate-50 dark:bg-zinc-900 disabled:opacity-60 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
-                            />
-                          </td>
-                          <td className="p-2.5">
-                            <input
-                              type="text"
-                              value={activeTab === "inbound" ? rule.source : rule.destination}
-                              disabled={isCatchAll}
-                              onChange={(e) => handleRuleChange(index, activeTab === "inbound" ? "source" : "destination", e.target.value)}
-                              className="bg-slate-50 dark:bg-zinc-900 disabled:opacity-60 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
-                            />
-                          </td>
-                          <td className="p-2.5">
-                            <select
-                              value={rule.action}
-                              disabled={isCatchAll}
-                              onChange={(e) => handleRuleChange(index, "action", e.target.value)}
-                              className={`bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs font-semibold focus:outline-none focus:border-teal-500 ${
-                                rule.action === "Allow" ? "text-emerald-600 dark:text-emerald-500" : "text-rose-600 dark:text-rose-500"
-                              }`}
-                            >
-                              <option value="Allow">Allow</option>
-                              <option value="Deny">Deny</option>
-                            </select>
-                          </td>
+            <div className="border border-slate-150 dark:border-zinc-850 rounded-xl overflow-hidden">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-zinc-900 border-b border-slate-150 dark:border-zinc-850 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                    <th className="p-2.5 w-16">Rule #</th>
+                    <th className="p-2.5">Type</th>
+                    <th className="p-2.5 w-20">Protocol</th>
+                    <th className="p-2.5 w-24">Port Range</th>
+                    <th className="p-2.5">{activeTab === "inbound" ? "Source" : "Destination"}</th>
+                    <th className="p-2.5 w-20">Action</th>
+                    {isCustom && <th className="p-2.5 w-12 text-center">Delete</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(isCustom ? rulesToRender : (activeTab === "inbound" ? defaultInbound : defaultOutbound)).map((rule, index) => {
+                    const isCatchAll = rule.ruleNumber === "*";
+                    return (
+                      <tr key={index} className="border-b border-slate-100 dark:border-zinc-900/50 last:border-0 bg-white dark:bg-zinc-950/40">
+                        <td className="p-2.5">
+                          <input
+                            type="text"
+                            value={rule.ruleNumber}
+                            disabled={!isCustom || isCatchAll}
+                            onChange={(e) => handleRuleChange(index, "ruleNumber", e.target.value)}
+                            className="bg-slate-50 dark:bg-zinc-900/50 disabled:opacity-75 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500 text-center font-semibold"
+                          />
+                        </td>
+                        <td className="p-2.5">
+                          <select
+                            value={rule.type}
+                            disabled={!isCustom || isCatchAll}
+                            onChange={(e) => handleRuleChange(index, "type", e.target.value)}
+                            className="bg-slate-50 dark:bg-zinc-900/50 disabled:opacity-75 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
+                          >
+                            <option value="All Traffic">All Traffic</option>
+                            <option value="HTTP (80)">HTTP (80)</option>
+                            <option value="HTTPS (443)">HTTPS (443)</option>
+                            <option value="SSH (22)">SSH (22)</option>
+                            <option value="RDP (3389)">RDP (3389)</option>
+                            <option value="Custom TCP">Custom TCP</option>
+                          </select>
+                        </td>
+                        <td className="p-2.5">
+                          <input
+                            type="text"
+                            value={rule.protocol}
+                            disabled={!isCustom || isCatchAll || rule.type !== "Custom TCP"}
+                            onChange={(e) => handleRuleChange(index, "protocol", e.target.value)}
+                            className="bg-slate-50 dark:bg-zinc-900/50 disabled:opacity-75 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 text-center focus:outline-none focus:border-teal-500"
+                          />
+                        </td>
+                        <td className="p-2.5">
+                          <input
+                            type="text"
+                            value={rule.portRange}
+                            disabled={!isCustom || isCatchAll || (rule.type !== "Custom TCP" && rule.type !== "All Traffic")}
+                            onChange={(e) => handleRuleChange(index, "portRange", e.target.value)}
+                            className="bg-slate-50 dark:bg-zinc-900/50 disabled:opacity-75 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
+                          />
+                        </td>
+                        <td className="p-2.5">
+                          <input
+                            type="text"
+                            value={activeTab === "inbound" ? rule.source : rule.destination}
+                            disabled={!isCustom || isCatchAll}
+                            onChange={(e) => handleRuleChange(index, activeTab === "inbound" ? "source" : "destination", e.target.value)}
+                            className="bg-slate-50 dark:bg-zinc-900/50 disabled:opacity-75 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs text-slate-800 dark:text-zinc-100 focus:outline-none focus:border-teal-500"
+                          />
+                        </td>
+                        <td className="p-2.5">
+                          <select
+                            value={rule.action}
+                            disabled={!isCustom || isCatchAll}
+                            onChange={(e) => handleRuleChange(index, "action", e.target.value)}
+                            className={`bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 w-full text-xs font-semibold focus:outline-none focus:border-teal-500 ${
+                              rule.action === "Allow" ? "text-emerald-600 dark:text-emerald-500" : "text-rose-600 dark:text-rose-500"
+                            }`}
+                          >
+                            <option value="Allow">Allow</option>
+                            <option value="Deny">Deny</option>
+                          </select>
+                        </td>
+                        {isCustom && (
                           <td className="p-2.5 text-center">
                             <button
+                              type="button"
                               onClick={() => handleRemoveRule(index)}
                               disabled={isCatchAll}
                               className="p-1.5 text-slate-400 hover:text-rose-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"
@@ -779,14 +808,14 @@ const SubnetNaclModal = ({ node, onClose, onUpdateNodeData }) => {
                               <Trash2 size={13} />
                             </button>
                           </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -1562,6 +1591,25 @@ const layoutAllVpcs = (nds) => {
   vpcs.forEach((vpc) => {
     updated = layoutSubnetsInVpc(vpc.id, updated);
   });
+
+  // Sort nodes so parent containers (vpcNode, subnetNode) come before child nodes (ec2Node, s3ObjectNode, etc.)
+  const typeOrder = {
+    "vpcNode": 1,
+    "subnetNode": 2,
+    "internetGatewayNode": 3,
+    "ec2Node": 4,
+    "s3Node": 4,
+    "s3ObjectNode": 5,
+    "iamGroupNode": 4,
+    "iamNode": 5
+  };
+  
+  updated.sort((a, b) => {
+    const orderA = typeOrder[a.type] || 99;
+    const orderB = typeOrder[b.type] || 99;
+    return orderA - orderB;
+  });
+
   return updated;
 };
 
@@ -2137,6 +2185,8 @@ export default function CloudForgeEditor({
     const isPolicy = (n) => n.type === "iamNode" && n.data?.iamType === "Policy";
     const isRole = (n) => n.type === "iamNode" && n.data?.iamType === "Role";
     const isEC2 = (n) => n.type === "ec2Node";
+    const isVpc = (n) => n.type === "vpcNode";
+    const isIgw = (n) => n.type === "internetGatewayNode";
 
     // 1. User <-> Group
     if ((isUser(source) && isGroup(target)) || (isGroup(source) && isUser(target))) {
@@ -2153,6 +2203,11 @@ export default function CloudForgeEditor({
 
     // 3. Role <-> EC2
     if ((isRole(source) && isEC2(target)) || (isEC2(source) && isRole(target))) {
+      return true;
+    }
+
+    // 4. Internet Gateway <-> VPC
+    if ((isIgw(source) && isVpc(target)) || (isVpc(source) && isIgw(target))) {
       return true;
     }
 
@@ -2174,23 +2229,26 @@ export default function CloudForgeEditor({
   const isDisallowedConnection = useCallback((sourceId, targetId) => {
     const source = nodes.find((n) => n.id === sourceId);
     const target = nodes.find((n) => n.id === targetId);
-    if (!source || !target) return false;
+    if (!source || !target) return true;
 
     const isUser = (n) => n.type === "iamNode" && n.data?.iamType === "User";
     const isGroup = (n) => n.type === "iamGroupNode" || (n.type === "iamNode" && n.data?.iamType === "Group");
     const isS3Bucket = (n) => n.type === "s3Node";
     const isS3Object = (n) => n.type === "s3ObjectNode";
 
+    // 1. Nesting constraints: user must be nested inside group, object inside bucket
     if ((isGroup(source) && isUser(target)) || (isUser(source) && isGroup(target))) {
-      return true;
+      return true; // Disallowed: nest instead
     }
 
     if ((isS3Bucket(source) && isS3Object(target)) || (isS3Object(source) && isS3Bucket(target))) {
-      return true;
+      return true; // Disallowed: nest instead
     }
 
-    return false;
-  }, [nodes]);
+    // 2. Meaningless edges: connection must be functional in AWS architecture
+    const edge = { source: sourceId, target: targetId };
+    return !isEdgeValuable(edge, nodes);
+  }, [nodes, isEdgeValuable]);
 
   const evaluatedNodes = useMemo(() => {
     return nodes.map((node) => {
@@ -2319,6 +2377,7 @@ export default function CloudForgeEditor({
   const [awaitingInput, setAwaitingInput] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
   const [hasDeployment, setHasDeployment] = useState(false);
+  const [liveResources, setLiveResources] = useState({});
   const [terminalMode, setTerminalMode] = useState("deploy"); // "deploy" or "destroy"
   const [isDeploymentsModalOpen, setIsDeploymentsModalOpen] = useState(false);
   const [deployments, setDeployments] = useState([]);
@@ -2428,6 +2487,190 @@ export default function CloudForgeEditor({
     }
   }, []);
 
+  const fetchLiveResources = useCallback(async () => {
+    try {
+      const response = await fetch("http://localhost:3001/api/deploy/live-resources");
+      if (!response.ok) return;
+      const data = await response.json();
+      const resources = data.resources || {};
+      setLiveResources(resources);
+
+      // Process automatic network discovery for standalone EC2 instances
+      setNodes((nds) => {
+        let currentNodes = [...nds];
+        let hasChanges = false;
+
+        // Find deployed EC2 nodes
+        const deployedEC2s = currentNodes.filter(
+          (n) => n.type === "ec2Node"
+        );
+
+        deployedEC2s.forEach((ec2) => {
+          const safeId = ec2.id.replace(/[^a-zA-Z0-9]/g, "");
+          const liveInfo = resources[safeId];
+          if (!liveInfo || !liveInfo.networkDetails) return;
+
+          const {
+            vpcId,
+            vpcCidr,
+            subnetId,
+            subnetCidr,
+            internetGatewayId,
+            internetGatewayName,
+          } = liveInfo.networkDetails;
+
+          // 1. Create or Find VPC node
+          let vpcNode = currentNodes.find((n) => n.id === vpcId);
+          if (!vpcNode) {
+            // If the EC2 node was already nested inside a subnet, its position is relative.
+            // We use the absolute coordinate of the EC2 node to place the VPC.
+            let absX = ec2.position.x;
+            let absY = ec2.position.y;
+            if (ec2.parentId) {
+              const sub = currentNodes.find(n => n.id === ec2.parentId);
+              if (sub) {
+                absX += sub.position.x;
+                absY += sub.position.y;
+                if (sub.parentId) {
+                  const vp = currentNodes.find(n => n.id === sub.parentId);
+                  if (vp) {
+                    absX += vp.position.x;
+                    absY += vp.position.y;
+                  }
+                }
+              }
+            }
+            vpcNode = {
+              id: vpcId,
+              type: "vpcNode",
+              data: {
+                label: `${vpcId} (Live)`,
+                region: ec2.data?.region || "us-east-1",
+                cidrBlock: vpcCidr || "172.31.0.0/16",
+              },
+              position: { x: absX - 120, y: absY - 120 },
+              zIndex: -2,
+              style: { width: 530, height: 350 },
+            };
+            currentNodes.push(vpcNode);
+            hasChanges = true;
+          }
+
+          // 2. Create or Find Subnet node
+          let subnetNode = currentNodes.find((n) => n.id === subnetId);
+          if (!subnetNode) {
+            subnetNode = {
+              id: subnetId,
+              type: "subnetNode",
+              data: {
+                label: `${subnetId} (Live)`,
+                region: ec2.data?.region || "us-east-1",
+                cidrBlock: subnetCidr || "172.31.16.0/20",
+                vpcCidr: vpcCidr || "172.31.0.0/16",
+                hasNatGateway: false,
+                hasRouteTable: true,
+                hasNetworkAcl: true,
+              },
+              parentId: vpcId,
+              position: { x: 25, y: 80 },
+              zIndex: -1,
+              style: { width: 480, height: 230 },
+              extent: "parent",
+            };
+            currentNodes.push(subnetNode);
+            hasChanges = true;
+          }
+
+          // 3. Create or Find Internet Gateway node
+          if (internetGatewayId) {
+            let igwNode = currentNodes.find((n) => n.id === internetGatewayId);
+            if (!igwNode) {
+              igwNode = {
+                id: internetGatewayId,
+                type: "internetGatewayNode",
+                data: {
+                  label: internetGatewayName || "Default IGW",
+                  region: ec2.data?.region || "us-east-1",
+                },
+                // Position to the right of the VPC container (VPC width is 530, + 80px gap)
+                position: { x: vpcNode.position.x + 530 + 80, y: vpcNode.position.y + 50 },
+                zIndex: 0,
+              };
+              currentNodes.push(igwNode);
+              hasChanges = true;
+            } else if (igwNode.position.x < vpcNode.position.x + 530) {
+              // If the IGW node already exists but is overlapping or positioned to the left/inside the VPC, align it to the right
+              currentNodes = currentNodes.map((n) => {
+                if (n.id === internetGatewayId) {
+                  return {
+                    ...n,
+                    position: { x: vpcNode.position.x + 530 + 80, y: vpcNode.position.y + 50 }
+                  };
+                }
+                return n;
+              });
+              hasChanges = true;
+            }
+
+            // Always ensure the edge connects cleanly via the side handles: IGW Left -> VPC Right
+            setEdges((eds) => {
+              const edgeExists = eds.some(
+                (e) => e.source === internetGatewayId && e.target === vpcId
+              );
+              if (edgeExists) {
+                return eds.map((e) => {
+                  if (e.source === internetGatewayId && e.target === vpcId) {
+                    return {
+                      ...e,
+                      sourceHandle: "left",
+                      targetHandle: "right",
+                      style: { stroke: "url(#purple-black-gradient)", strokeWidth: 4 },
+                      animated: true,
+                    };
+                  }
+                  return e;
+                });
+              } else {
+                return eds.concat({
+                  id: `edge_${internetGatewayId}_to_${vpcId}`,
+                  source: internetGatewayId,
+                  sourceHandle: "left",
+                  target: vpcId,
+                  targetHandle: "right",
+                  type: "default",
+                  animated: true,
+                  style: { stroke: "url(#purple-black-gradient)", strokeWidth: 4 },
+                });
+              }
+            });
+          }
+
+          // 4. Move EC2 Node inside the subnet
+          currentNodes = currentNodes.map((n) => {
+            if (n.id === ec2.id && n.parentId !== subnetId) {
+              hasChanges = true;
+              return {
+                ...n,
+                parentId: subnetId,
+                extent: "parent",
+                position: { x: 60, y: 80 }, // relative to subnet parent
+              };
+            }
+            return n;
+          });
+        });
+
+        if (hasChanges) {
+          return layoutAllVpcs(currentNodes);
+        }
+
+        return nds;
+      });
+    } catch (err) {
+      console.warn("Failed to fetch live resources:", err);
+    }
+  }, [setNodes, setEdges]);
+
   useEffect(() => {
     if (terminalEndRef.current) {
       terminalEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -2438,6 +2681,12 @@ export default function CloudForgeEditor({
     checkDeploymentStatus();
     fetchDeploymentsList();
   }, [checkDeploymentStatus, fetchDeploymentsList]);
+
+  useEffect(() => {
+    if (hasDeployment) {
+      fetchLiveResources();
+    }
+  }, [hasDeployment, fetchLiveResources]);
   const [isInstanceModalOpen, setIsInstanceModalOpen] = useState(false);
   const [instanceActiveTab, setInstanceActiveTab] = useState("All");
   const [instanceSearchQuery, setInstanceSearchQuery] = useState("");
@@ -2999,20 +3248,40 @@ export default function CloudForgeEditor({
       };
       addLog(`➕ Added Internet Gateway and Connected.`, "success");
     } else if (nodeType === "s3ObjectNode") {
+      // Find if we are creating it inside an S3 bucket
+      const bucketNode = nodes.find((n) => {
+        if (n.type !== "s3Node") return false;
+        const gx = n.position.x;
+        const gy = n.position.y;
+        const gw = n.style?.width || 300;
+        const gh = n.style?.height || 200;
+
+        const cx = centeredPosition.x + 110;
+        const cy = centeredPosition.y + 35;
+        return cx >= gx && cx <= gx + gw && cy >= gy && cy <= gy + gh;
+      });
+
+      if (!bucketNode) {
+        setToast("S3 objects can only be placed inside S3 buckets");
+        addLog("⚠️ S3 objects can only be placed inside S3 buckets.", "warn");
+        return;
+      }
+
       newNodeId = `s3_obj_${Date.now()}`;
       newNode = {
         id: newNodeId,
         type: "s3ObjectNode",
+        parentId: bucketNode.id,
         data: {
           label: `new-object-${Math.floor(Math.random() * 1000)}`,
           sourceType: "file",
           sourcePath: "",
           region: userSettings.defaultRegion,
         },
-        position: centeredPosition,
+        position: { x: 20, y: 50 },
         zIndex: 0,
       };
-      addLog(`➕ Added S3 Object and Connected.`, "success");
+      addLog(`➕ Added S3 Object and Connected (Grouped).`, "success");
     } else if (nodeType === "ec2Node") {
       newNodeId = `ec2_${Date.now()}`;
       newNode = {
@@ -3129,7 +3398,13 @@ export default function CloudForgeEditor({
         style: { strokeWidth: 2, stroke: "#94a3b8" },
       };
 
-      setNodes((nds) => nds.concat(newNode));
+      setNodes((nds) => {
+        const nextNodes = nds.concat(newNode);
+        if (newNode.parentId) {
+          return updateParentLayoutAndVpcs(newNode.parentId, nextNodes);
+        }
+        return nextNodes;
+      });
       setEdges((eds) => eds.concat(newEdge));
     }
   }, [floatingConnectionSearch, setNodes, setEdges, takeSnapshot, addLog, userSettings.defaultRegion, nodes]);
@@ -3201,6 +3476,29 @@ export default function CloudForgeEditor({
       const validNewParent = intersections.find((n) => 
         isValidParentForChild(n.type, node.type, node.data?.iamType)
       );
+
+      // Block S3 objects from being dragged outside of S3 buckets (snap it back instead of deleting)
+      if (node.type === "s3ObjectNode" && (!validNewParent || validNewParent.type !== "s3Node")) {
+        setToast("S3 objects can only be placed inside S3 buckets");
+        addLog("⚠️ S3 objects can only be placed inside S3 buckets.", "warn");
+        setNodes((nds) => {
+          const updatedNodes = nds.map((n) => {
+            if (n.id === node.id) {
+              return {
+                ...n,
+                parentId: node.parentId,
+                position: { x: 20, y: 50 },
+              };
+            }
+            return n;
+          });
+          if (node.parentId) {
+            return updateParentLayoutAndVpcs(node.parentId, updatedNodes);
+          }
+          return updatedNodes;
+        });
+        return;
+      }
 
       // Handle node that has a current parent
       if (node.parentId) {
@@ -3486,17 +3784,60 @@ export default function CloudForgeEditor({
       y: contextMenu.y,
     });
     const newId = `${clipboard.type.replace("Node", "")}_${Date.now()}`;
-    setNodes((nds) => {
-      const newNodeObj = {
-        ...clipboard,
-        id: newId,
-        position,
-        selected: false,
-        data: { ...clipboard.data, label: `${clipboard.data.label}-copy` },
-      };
-      const nextNodes = nds.concat(newNodeObj);
-      return updateParentLayoutAndVpcs(clipboard.parentId, nextNodes);
-    });
+    
+    let targetParentId = clipboard.parentId;
+    
+    // Paste constraints for S3 Objects
+    if (clipboard.type === "s3ObjectNode") {
+      setNodes((nds) => {
+        const targetBucket = nds.find((n) => {
+          if (n.type !== "s3Node") return false;
+          const gx = n.position.x;
+          const gy = n.position.y;
+          const gw = n.style?.width || 300;
+          const gh = n.style?.height || 200;
+          
+          const cx = position.x + 110;
+          const cy = position.y + 35;
+          return cx >= gx && cx <= gx + gw && cy >= gy && cy <= gy + gh;
+        });
+        
+        if (targetBucket) {
+          targetParentId = targetBucket.id;
+        } else {
+          // If not pasted over a bucket, check if the old bucket still exists
+          const oldBucketExists = nds.some((n) => n.id === clipboard.parentId);
+          if (!oldBucketExists) {
+            setToast("S3 objects can only be placed inside S3 buckets");
+            addLog("⚠️ S3 objects can only be placed inside S3 buckets.", "warn");
+            return nds;
+          }
+        }
+        
+        const newNodeObj = {
+          ...clipboard,
+          id: newId,
+          parentId: targetParentId,
+          position: targetParentId ? { x: 0, y: 0 } : position,
+          selected: false,
+          data: { ...clipboard.data, label: `${clipboard.data.label}-copy` },
+        };
+        const nextNodes = nds.concat(newNodeObj);
+        return updateParentLayoutAndVpcs(targetParentId, nextNodes);
+      });
+    } else {
+      setNodes((nds) => {
+        const newNodeObj = {
+          ...clipboard,
+          id: newId,
+          position,
+          selected: false,
+          data: { ...clipboard.data, label: `${clipboard.data.label}-copy` },
+        };
+        const nextNodes = nds.concat(newNodeObj);
+        return updateParentLayoutAndVpcs(clipboard.parentId, nextNodes);
+      });
+    }
     addLog(`📋 Pasted component.`, "success");
     setContextMenu(null);
   };
@@ -3830,19 +4171,9 @@ export default function CloudForgeEditor({
         addLog(`➕ Added S3 Object (Grouped).`, "success");
         return;
       } else {
-        newNode = {
-          id: `s3_obj_${Date.now()}`,
-          type: "s3ObjectNode",
-          data: {
-            label: `new-object-${Math.floor(Math.random() * 1000)}`,
-            sourceType: "file",
-            sourcePath: "",
-            region: userSettings.defaultRegion,
-          },
-          position: resolvedPosition,
-          zIndex: 0,
-        };
-        addLog(`➕ Added S3 Object.`, "info");
+        setToast("S3 objects can only be placed inside S3 buckets");
+        addLog("⚠️ S3 objects can only be placed inside S3 buckets.", "warn");
+        return;
       }
     } else if (nodeType === "ec2Node") {
       let parentGroupId = null;
@@ -4196,6 +4527,9 @@ export default function CloudForgeEditor({
         setAwaitingInput(false);
         eventSource.close();
         checkDeploymentStatus();
+        if (data.code === 0) {
+          fetchLiveResources();
+        }
       }
     };
 
@@ -4703,6 +5037,7 @@ export default function CloudForgeEditor({
             onConnectStart={onConnectStart}
             onConnectEnd={onConnectEnd}
             connectionMode={ConnectionMode.Loose}
+            isValidConnection={(connection) => !isDisallowedConnection(connection.source, connection.target)}
             defaultEdgeOptions={{
               style: { strokeWidth: 2, stroke: "#94a3b8" },
               reconnectable: true, // ENABLES GRABBERS ON CLICK
@@ -4728,6 +5063,14 @@ export default function CloudForgeEditor({
                 maskStrokeWidth={1.5}
               />
             )}
+            <svg style={{ position: 'absolute', width: 0, height: 0 }}>
+              <defs>
+                <linearGradient id="purple-black-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#a855f7" /> {/* purple */}
+                  <stop offset="100%" stopColor="#18181b" /> {/* black */}
+                </linearGradient>
+              </defs>
+            </svg>
           </ReactFlow>
         </main>
 
@@ -5533,6 +5876,87 @@ export default function CloudForgeEditor({
                       </div>
                     )}
                   </div>
+
+                  {(() => {
+                    const safeId = selectedNode.id.replace(/[^a-zA-Z0-9]/g, '');
+                    const liveInfo = liveResources[safeId];
+                    if (!liveInfo) return null;
+
+                    return (
+                      <div className="border-t border-slate-100 dark:border-zinc-800/80 pt-4 mt-4 flex flex-col gap-3 animate-fade-in text-left">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-mono">
+                            Live Deployment Details
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-50 dark:bg-zinc-900/40 border border-slate-150 dark:border-zinc-800/60 rounded-2xl p-4 flex flex-col gap-3 font-mono text-[11px] shadow-sm">
+                          {/* Instance ID */}
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 dark:text-zinc-500 font-bold uppercase tracking-wider">INSTANCE ID</span>
+                            <span 
+                              onClick={() => {
+                                navigator.clipboard.writeText(liveInfo.instanceId);
+                                addLog(`📋 Copied Instance ID: ${liveInfo.instanceId}`, "success");
+                              }}
+                              className="text-slate-700 dark:text-zinc-300 font-bold hover:text-amber-500 dark:hover:text-amber-450 transition-colors select-all cursor-pointer bg-slate-100 dark:bg-zinc-800/60 px-2 py-0.5 rounded"
+                            >
+                              {liveInfo.instanceId}
+                            </span>
+                          </div>
+
+                          {/* Public IP */}
+                          <div className="flex justify-between items-center border-t border-slate-100 dark:border-zinc-800/40 pt-2.5">
+                            <span className="text-slate-400 dark:text-zinc-500 font-bold uppercase tracking-wider">PUBLIC IP</span>
+                            <span 
+                              onClick={() => {
+                                if (liveInfo.publicIp) {
+                                  navigator.clipboard.writeText(liveInfo.publicIp);
+                                  addLog(`📋 Copied Public IP: ${liveInfo.publicIp}`, "success");
+                                }
+                              }}
+                              className="text-amber-600 dark:text-amber-400 font-extrabold hover:text-amber-700 dark:hover:text-amber-300 transition-colors select-all cursor-pointer bg-slate-100 dark:bg-zinc-800/60 px-2 py-0.5 rounded"
+                            >
+                              {liveInfo.publicIp || "None (Private Subnet)"}
+                            </span>
+                          </div>
+
+                          {/* Private IP */}
+                          <div className="flex justify-between items-center border-t border-slate-100 dark:border-zinc-800/40 pt-2.5">
+                            <span className="text-slate-450 dark:text-zinc-550 font-bold uppercase tracking-wider">PRIVATE IP</span>
+                            <span 
+                              onClick={() => {
+                                if (liveInfo.privateIp) {
+                                  navigator.clipboard.writeText(liveInfo.privateIp);
+                                  addLog(`📋 Copied Private IP: ${liveInfo.privateIp}`, "success");
+                                }
+                              }}
+                              className="text-slate-700 dark:text-zinc-300 font-bold hover:text-amber-500 dark:hover:text-amber-450 transition-colors select-all cursor-pointer bg-slate-100 dark:bg-zinc-800/60 px-2 py-0.5 rounded"
+                            >
+                              {liveInfo.privateIp || "N/A"}
+                            </span>
+                          </div>
+
+                          {/* Public DNS */}
+                          {liveInfo.publicDns && (
+                            <div className="flex flex-col gap-1.5 border-t border-slate-100 dark:border-zinc-800/40 pt-2.5">
+                              <span className="text-slate-400 dark:text-zinc-500 font-bold uppercase tracking-wider">PUBLIC DNS</span>
+                              <span 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(liveInfo.publicDns);
+                                  addLog("📋 Copied Public DNS", "success");
+                                }}
+                                className="text-slate-650 dark:text-zinc-400 font-sans break-all select-all hover:text-amber-500 dark:hover:text-amber-450 transition-colors cursor-pointer bg-slate-100 dark:bg-zinc-800/60 p-2 rounded-xl text-left"
+                              >
+                                {liveInfo.publicDns}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               )}
 

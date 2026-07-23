@@ -3,7 +3,9 @@ import express from 'express';
 import cors from 'cors';
 import { App, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
+import { spawn, ChildProcessWithoutNullStreams, exec } from 'child_process';
+import { promisify } from 'util';
+const execPromise = promisify(exec);
 
 // Imports mapped to your local .gen folder
 import { AwsProvider } from './.gen/providers/aws/provider';
@@ -1149,6 +1151,114 @@ app.get('/api/deploy/stream', (req, res) => {
       activeProcess = null;
     }
   });
+});
+
+async function getLiveNetworkDetails(subnetId: string) {
+  try {
+    // 1. Describe Subnet to get VPC ID and Subnet CIDR
+    const subnetCmd = `aws ec2 describe-subnets --subnet-ids ${subnetId}`;
+    const { stdout: subnetStdout } = await execPromise(subnetCmd);
+    const subnetData = JSON.parse(subnetStdout).Subnets?.[0];
+    if (!subnetData) return null;
+
+    const vpcId = subnetData.VpcId;
+    const subnetCidr = subnetData.CidrBlock;
+
+    // 2. Describe VPC to get VPC CIDR
+    const vpcCmd = `aws ec2 describe-vpcs --vpc-ids ${vpcId}`;
+    const { stdout: vpcStdout } = await execPromise(vpcCmd);
+    const vpcData = JSON.parse(vpcStdout).Vpcs?.[0];
+    const vpcCidr = vpcData?.CidrBlock || "172.31.0.0/16";
+
+    // 3. Describe Internet Gateway attached to the VPC
+    const igwCmd = `aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=${vpcId}"`;
+    let igwId = null;
+    let igwName = "Internet Gateway";
+    try {
+      const { stdout: igwStdout } = await execPromise(igwCmd);
+      const igwData = JSON.parse(igwStdout).InternetGateways?.[0];
+      if (igwData) {
+        igwId = igwData.InternetGatewayId;
+        const nameTag = igwData.Tags?.find((t: any) => t.Key === 'Name')?.Value;
+        if (nameTag) igwName = nameTag;
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch IGW details for VPC ${vpcId}:`, e);
+    }
+
+    // Fallback if no IGW found (e.g. CLI permissions or mock setup) to ensure it is created on canvas
+    if (!igwId && vpcId) {
+      igwId = `igw-${vpcId.replace('vpc-', '')}`;
+      igwName = "Default IGW";
+    }
+
+
+    return {
+      vpcId,
+      vpcCidr,
+      subnetId,
+      subnetCidr,
+      internetGatewayId: igwId,
+      internetGatewayName: igwName
+    };
+  } catch (err) {
+    console.error(`Error querying AWS CLI for subnet ${subnetId}:`, err);
+    return null;
+  }
+}
+
+app.get('/api/deploy/live-resources', async (_req, res): Promise<any> => {
+  let tfstatePath = path.join(__dirname, 'terraform.cloudforge-export.tfstate');
+  if (!fs.existsSync(tfstatePath)) {
+    tfstatePath = path.join(__dirname, 'cdktf.out', 'stacks', 'cloudforge-export', 'terraform.tfstate');
+  }
+  if (!fs.existsSync(tfstatePath)) {
+    return res.json({ resources: {} });
+  }
+
+  try {
+    const tfstate = JSON.parse(fs.readFileSync(tfstatePath, 'utf-8'));
+    const resourcesInfo: Record<string, any> = {};
+
+    if (tfstate.resources) {
+      for (const resource of tfstate.resources) {
+        if (resource.type === 'aws_instance') {
+          const nodeSafeId = resource.name;
+          const instanceData = resource.instances?.[0]?.attributes;
+          if (instanceData) {
+            const subnetId = instanceData.subnet_id;
+            let networkDetails = null;
+
+            if (subnetId) {
+              networkDetails = await getLiveNetworkDetails(subnetId);
+            }
+
+            resourcesInfo[nodeSafeId] = {
+              instanceId: instanceData.id,
+              publicIp: instanceData.public_ip || null,
+              privateIp: instanceData.private_ip || null,
+              publicDns: instanceData.public_dns || null,
+              privateDns: instanceData.private_dns || null,
+              state: instanceData.instance_state || 'running',
+              subnetId: subnetId || null,
+              networkDetails: networkDetails || {
+                vpcId: 'vpc-default',
+                vpcCidr: '172.31.0.0/16',
+                subnetId: subnetId || 'subnet-default',
+                subnetCidr: '172.31.16.0/20',
+                internetGatewayId: 'igw-default',
+                internetGatewayName: 'Default IGW'
+              }
+            };
+          }
+        }
+      }
+    }
+    return res.json({ resources: resourcesInfo });
+  } catch (err) {
+    console.error("Failed to read terraform state:", err);
+    return res.status(500).json({ error: "Failed to read terraform state", details: String(err) });
+  }
 });
 
 const DEPLOYMENTS_DIR = path.join(__dirname, 'deployments');

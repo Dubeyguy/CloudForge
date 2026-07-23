@@ -394,3 +394,8 @@ div:focus {
   border-color: #6B8E4E !important;
   box-shadow: 0 0 15px rgba(107, 142, 78, 0.08) !important;
 }
+
+/* Connection handle validation styles (XYFlow 12+) */
+.react-flow__handle.connectingto:not(.valid) {
+  cursor: not-allowed !important;
+}
