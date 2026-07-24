@@ -23,6 +23,7 @@ import { IamRolePolicyAttachment } from './.gen/providers/aws/iam-role-policy-at
 import { Instance } from './.gen/providers/aws/instance';
 import { IamInstanceProfile } from './.gen/providers/aws/iam-instance-profile';
 import { S3Object } from './.gen/providers/aws/s3-object';
+import { S3ObjectCopy } from './.gen/providers/aws/s3-object-copy';
 import { SecurityGroup } from './.gen/providers/aws/security-group';
 
 import * as fs from 'fs';
@@ -53,6 +54,8 @@ interface VisualNode {
     volumeSize?: number;
     sourceType?: string;
     sourcePath?: string;
+    sourceBucketId?: string;
+    sourceBucketName?: string;
     hasCustomSecurityGroup?: boolean;
     securityGroup?: {
       id?: string;
@@ -86,6 +89,19 @@ interface VisualNode {
 interface VisualEdge {
   source: string;
   target: string;
+}
+
+function resolveLocalPath(srcPath: string): string {
+  if (!srcPath) return '';
+  let resolved = srcPath;
+  if (srcPath.startsWith('/home/')) {
+    const parts = srcPath.split('/');
+    if (parts.length > 2) {
+      const relativeToHome = parts.slice(3).join(path.sep);
+      resolved = path.join(os.homedir(), relativeToHome);
+    }
+  }
+  return path.resolve(resolved);
 }
 
 class CloudForgeStack extends TerraformStack {
@@ -326,9 +342,29 @@ class CloudForgeStack extends TerraformStack {
         const sourcePath = node.data.sourcePath || '';
         const sourceType = node.data.sourceType || 'file';
 
+        const sourceBucketId = node.data.sourceBucketId;
+        const sourceBucketName = node.data.sourceBucketName;
+
+        if ((sourceBucketId || sourceBucketName) && sourceBucketId !== parentId) {
+          const srcBucketRef = sourceBucketId ? resourceMap.get(sourceBucketId)?.ref as S3Bucket : null;
+          const sourceBucketString = srcBucketRef ? srcBucketRef.bucket : sourceBucketName;
+
+          if (sourceBucketString) {
+            new S3ObjectCopy(this, safeId, {
+              bucket: bucketRef.bucket,
+              key: objectKey,
+              source: `${sourceBucketString}/${objectKey}`,
+              lifecycle: {
+                createBeforeDestroy: true,
+              },
+            });
+            return;
+          }
+        }
+
         if (sourceType === 'folder' && sourcePath) {
           try {
-            const absoluteSourcePath = path.resolve(sourcePath);
+            const absoluteSourcePath = resolveLocalPath(sourcePath);
             if (fs.existsSync(absoluteSourcePath) && fs.statSync(absoluteSourcePath).isDirectory()) {
               const walkFiles = (dir: string): string[] => {
                 let results: string[] = [];
@@ -374,7 +410,7 @@ class CloudForgeStack extends TerraformStack {
           }
         } else if (sourcePath) {
           try {
-            const absoluteSourcePath = path.resolve(sourcePath);
+            const absoluteSourcePath = resolveLocalPath(sourcePath);
             if (fs.existsSync(absoluteSourcePath)) {
               new S3Object(this, safeId, {
                 bucket: bucketRef.bucket,

@@ -2817,6 +2817,75 @@ export default function CloudForgeEditor({
     addLog(`⏩ Action redone.`, "info");
   }, [future, nodes, edges, setNodes, setEdges, addLog]);
 
+  const handleDeleteSelected = useCallback(() => {
+    const selectedNodes = nodes.filter((n) => n.selected);
+    const selectedEdges = edges.filter((e) => e.selected);
+
+    if (selectedNodes.length === 0 && selectedEdges.length === 0) return;
+
+    // Check if any of the selected nodes is a group containing children
+    const groupNodesWithChildren = selectedNodes.filter((node) => {
+      const isGroup = node.type === "iamGroupNode" || node.type === "s3Node" || node.type === "vpcNode" || node.type === "subnetNode";
+      if (isGroup) {
+        const hasChildren = nodes.some((child) => child.parentId === node.id);
+        return hasChildren;
+      }
+      return false;
+    });
+
+    const executeDelete = () => {
+      takeSnapshot();
+
+      // Collect all node IDs to delete
+      const nodeIdsToDelete = new Set(selectedNodes.map((n) => n.id));
+
+      // Also collect all child node IDs of selected groups
+      selectedNodes.forEach((node) => {
+        const isGroup = node.type === "iamGroupNode" || node.type === "s3Node" || node.type === "vpcNode" || node.type === "subnetNode";
+        if (isGroup) {
+          nodes.forEach((child) => {
+            if (child.parentId === node.id) {
+              nodeIdsToDelete.add(child.id);
+            }
+          });
+        }
+      });
+
+      // Filter out deleted nodes
+      setNodes((nds) => {
+        let updated = nds.filter((n) => !nodeIdsToDelete.has(n.id));
+        return layoutAllVpcs(updated);
+      });
+
+      // Filter out deleted edges and edges connected to deleted nodes
+      const edgeIdsToDelete = new Set(selectedEdges.map((e) => e.id));
+      setEdges((eds) =>
+        eds.filter(
+          (e) =>
+            !edgeIdsToDelete.has(e.id) &&
+            !nodeIdsToDelete.has(e.source) &&
+            !nodeIdsToDelete.has(e.target)
+        )
+      );
+
+      setSelectedNodeId(null);
+      addLog(`🗑️ Deleted selected component(s).`, "warn");
+    };
+
+    if (groupNodesWithChildren.length > 0) {
+      showConfirm({
+        title: "Delete Selected Groups and Children?",
+        message: "Some of the selected groups contain items inside which will also get deleted. Do you want to proceed?",
+        type: "danger",
+        confirmText: "Yes, Delete All",
+        cancelText: "Cancel",
+        onConfirm: executeDelete,
+      });
+    } else {
+      executeDelete();
+    }
+  }, [nodes, edges, setNodes, setEdges, takeSnapshot, addLog, showConfirm]);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       const isInput = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName);
@@ -2840,6 +2909,9 @@ export default function CloudForgeEditor({
       } else if ((e.ctrlKey || e.metaKey) && e.key === "y") {
         e.preventDefault();
         redo();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        handleDeleteSelected();
       } else if (e.shiftKey && e.key === "Tab") {
         // Shift + Tab -> Toggle Nodes Panel
         e.preventDefault();
@@ -2856,7 +2928,7 @@ export default function CloudForgeEditor({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [undo, redo, setIsLeftPanelOpen, setActiveMode]);
+  }, [undo, redo, setIsLeftPanelOpen, setActiveMode, handleDeleteSelected]);
 
   useEffect(() => {
     if (!userSettings.autoSave) return;
@@ -3521,10 +3593,18 @@ export default function CloudForgeEditor({
                 // Dragged node
                 if (n.id === node.id) {
                   if (newParentId) {
+                    const isS3Obj = n.type === "s3ObjectNode";
                     return {
                       ...n,
                       parentId: newParentId,
                       ...(validNewParent.type === "vpcNode" ? { extent: "parent" } : { extent: undefined }),
+                      ...(isS3Obj ? {
+                        data: {
+                          ...n.data,
+                          sourceBucketId: oldParentId,
+                          sourceBucketName: parentGroupNode?.data?.label || "",
+                        }
+                      } : {}),
                     };
                   } else {
                     const { parentId, extent, ...rest } = n;
@@ -3716,6 +3796,13 @@ export default function CloudForgeEditor({
     if (contextMenu.type === "node") {
       const node = nodes.find((n) => n.id === contextMenu.id);
       if (node) {
+        // If the right-clicked node is selected, delete all selected nodes together!
+        if (node.selected) {
+          handleDeleteSelected();
+          setContextMenu(null);
+          return;
+        }
+
         const isGroup = node.type === "iamGroupNode" || node.type === "s3Node" || node.type === "vpcNode" || node.type === "subnetNode";
         const children = isGroup ? nodes.filter((n) => n.parentId === node.id) : [];
 
