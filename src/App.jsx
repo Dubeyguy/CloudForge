@@ -77,22 +77,7 @@ export default function App() {
       name,
       edges: [],
       updatedAt: Date.now(),
-      nodes: [
-        {
-          id: "s3_bucket_primary",
-          type: "s3Node",
-          data: {
-            label: "production-assets-bucket",
-            region: userSettings.defaultRegion,
-            isPublic: false,
-            versioning: true,
-            storageGB: 10,
-            cost: 0.23,
-          },
-          position: { x: 250, y: 150 },
-          zIndex: 0,
-        },
-      ],
+      nodes: [],
     };
     try {
       const res = await fetch("http://localhost:3001/api/projects", {

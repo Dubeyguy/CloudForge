@@ -1041,20 +1041,4 @@ export const InternetGatewayNode = ({ data, id }) => {
 
 export const nodeTypes = { s3Node: S3Node, s3ObjectNode: S3ObjectNode, shapeNode: ShapeNode, iamNode: IAMNode, iamGroupNode: IAMGroupNode, ec2Node: EC2Node, vpcNode: VPCNode, subnetNode: SubnetNode, internetGatewayNode: InternetGatewayNode };
 
-export const defaultInitialNodes = [
-  {
-    id: "s3_bucket_primary",
-    type: "s3Node",
-    data: {
-      label: "production-assets-bucket",
-      region: "us-east-1",
-      isPublic: false,
-      versioning: true,
-      storageGB: 10,
-      cost: 0.23,
-    },
-    position: { x: 250, y: 150 },
-    zIndex: -1,
-    style: { width: 300, height: 200 },
-  },
-];
+export const defaultInitialNodes = [];
